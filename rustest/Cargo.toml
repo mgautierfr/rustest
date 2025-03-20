@@ -1,0 +1,8 @@
+[package]
+name = "rustest"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libtest-mimic = "0.8.1"
+rustest-macro = { version = "0.1.0", path = "../rustest-macro" }
