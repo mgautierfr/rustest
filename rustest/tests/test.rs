@@ -12,7 +12,9 @@ fn simple_test() {
     )
 }
 
+// Test expected to fail can be marked with #[xfail] attribute
 #[test]
+#[xfail]
 fn simple_test_failing() {
     assert!(
         5 * 4 == 30,
@@ -25,7 +27,8 @@ fn return_test() -> Result {
     Ok(())
 }
 
-#[test]
+// Test expected to fail can also be marked with test(xfail) attribute
+#[test(xfail)]
 fn return_test_failing() -> Result {
     Err(std::io::Error::other("Dummy error"))?;
     Ok(())

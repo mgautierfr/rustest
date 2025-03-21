@@ -7,8 +7,8 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::{quote, quote_spanned};
 use syn::{
-    AngleBracketedGenericArguments, FnArg, ItemFn, LitStr, PathArguments, ReturnType, Visibility,
-    parse_macro_input, spanned::Spanned,
+    AngleBracketedGenericArguments, Attribute, FnArg, ItemFn, LitStr, PathArguments, ReturnType,
+    Visibility, parse_macro_input, spanned::Spanned,
 };
 
 static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -20,16 +20,47 @@ fn build_fixture_create(pat: &syn::Ident) -> proc_macro2::TokenStream {
     }
 }
 
+fn is_xfail(attrs: &Vec<Attribute>) -> bool {
+    for attr in attrs.iter() {
+        if attr.path().is_ident("xfail") {
+            return true;
+        }
+    }
+    false
+}
+
+#[derive(FromMeta)]
+struct TestAttr {
+    #[darling(default)]
+    xfail: bool,
+}
+
 /// This macro automatically adds tests function marked with #[test] to the test collection.
 #[proc_macro_attribute]
-pub fn test(_args: TokenStream, input: TokenStream) -> TokenStream {
-    let ItemFn { sig, block, .. } = parse_macro_input!(input as ItemFn);
+pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
+    let ItemFn {
+        sig, block, attrs, ..
+    } = parse_macro_input!(input as ItemFn);
+    let attr_args = match NestedMeta::parse_meta_list(args.into()) {
+        Ok(v) => v,
+        Err(e) => {
+            return TokenStream::from(darling::Error::from(e).write_errors());
+        }
+    };
+    let args = match TestAttr::from_list(&attr_args) {
+        Ok(v) => v,
+        Err(e) => {
+            return TokenStream::from(e.write_errors());
+        }
+    };
 
     let ident = &sig.ident;
     let test_name = ident.to_string();
     let test_name_str = LitStr::new(&test_name, Span::call_site());
     let ctor_name = format!("__{}_add_test", test_name);
     let ctor_ident = Ident::new(&ctor_name, Span::call_site());
+
+    let is_xfail = args.xfail || is_xfail(&attrs);
 
     let mut fixtures = vec![];
     let mut test_args = vec![];
@@ -52,12 +83,12 @@ pub fn test(_args: TokenStream, input: TokenStream) -> TokenStream {
         #sig #block
 
         fn #ctor_ident(ctx: &mut ::rustest::Context) -> ::std::result::Result<::rustest::libtest_mimic::Trial, ::rustest::FixtureCreationError> {
-            use ::rustest::CollectError;
+            use ::rustest::IntoError;
             #(#fixtures)*
             Ok(::rustest::libtest_mimic::Trial::test(
                 #test_name_str,
-                    move || {
-                        #ident(#(#test_args),*).collect_error()
+                move || {
+                    ::rustest::run_test(|| {#ident(#(#test_args),*).into_error()}, #is_xfail)
                 }
             ))
         }
