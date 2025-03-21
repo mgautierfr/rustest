@@ -1,0 +1,14 @@
+[workspace]
+members = ["rustest", "rustest-macro"]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+authors = ["Matthieu Gautier <mgautier@kymeria.fr>"]
+repository = "https://github.com/kymeria/rustest"
+homepage = "https://github.com/kymeria/rustest"
+license = "MIT"
+license-file = "LICENSE-MIT"
+
+
