@@ -1,4 +1,4 @@
-use core::convert::From;
+use core::{convert::From, unreachable};
 use std::sync::Mutex;
 
 use darling::FromMeta;
@@ -7,14 +7,14 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::{quote, quote_spanned};
 use syn::{
-    AngleBracketedGenericArguments, FnArg, ItemFn, LitStr, PathArguments, ReturnType,
+    AngleBracketedGenericArguments, FnArg, ItemFn, LitStr, PathArguments, ReturnType, Visibility,
     parse_macro_input, spanned::Spanned,
 };
 
 static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static FIXTURE_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
-fn build_fixture_create(pat: &syn::Pat, ty: &syn::Type) -> proc_macro2::TokenStream {
+fn build_fixture_create(pat: &syn::Ident) -> proc_macro2::TokenStream {
     quote! {
         let #pat = ctx.get_fixture()?;
     }
@@ -36,8 +36,12 @@ pub fn test(_args: TokenStream, input: TokenStream) -> TokenStream {
 
     sig.inputs.iter().for_each(|fnarg| {
         if let FnArg::Typed(fnarg) = fnarg {
-            let pat = &fnarg.pat;
-            fixtures.push(build_fixture_create(pat, &fnarg.ty));
+            let pat = if let syn::Pat::Ident(patident) = fnarg.pat.as_ref() {
+                &patident.ident
+            } else {
+                unreachable!()
+            };
+            fixtures.push(build_fixture_create(pat));
             test_args.push(quote! {#pat});
         }
     });
@@ -53,7 +57,7 @@ pub fn test(_args: TokenStream, input: TokenStream) -> TokenStream {
             Ok(::rustest::libtest_mimic::Trial::test(
                 #test_name_str,
                     move || {
-                        #ident(#(#test_args),*).into()
+                        #ident(#(#test_args),*).collect_error()
                 }
             ))
         }
@@ -135,44 +139,71 @@ fn fixture_impl(
     args: FixtureAttr,
     input: ItemFn,
 ) -> Result<proc_macro2::TokenStream, proc_macro2::TokenStream> {
-    let ItemFn { sig, block, .. } = input;
+    let ItemFn {
+        sig, block, vis, ..
+    } = input;
 
     let fixture_name = args.name.as_ref().unwrap_or(&sig.ident);
-    let builder_output = &sig.output;
     let (fallible, fixture_type) = get_fixture_type(&sig)?;
 
     let mut fixtures = vec![];
     let mut test_args = vec![];
-    let sig_inputs = &sig.inputs;
 
     sig.inputs.iter().for_each(|fnarg| {
         if let FnArg::Typed(fnarg) = fnarg {
-            let pat = &fnarg.pat;
-            fixtures.push(build_fixture_create(pat, &fnarg.ty));
+            let pat = if let syn::Pat::Ident(patident) = fnarg.pat.as_ref() {
+                &patident.ident
+            } else {
+                unreachable!()
+            };
+            fixtures.push(build_fixture_create(pat));
             test_args.push(quote! {#pat});
         }
     });
 
-    let (fixture_inner, fixture_impl) = if args.global {
-        FIXTURE_COLLECTORS
-            .lock()
-            .unwrap()
-            .push(fixture_name.to_string());
-
-        let fixture_inner = quote! { std::sync::Arc<#fixture_type> };
-        let fixture_impl = quote! {};
-        (fixture_inner, fixture_impl)
+    if args.global {
+        Ok(global_fixture(
+            vis,
+            fixture_name,
+            fixture_type,
+            args.fallible.unwrap_or(fallible),
+            fixtures,
+            test_args,
+            &sig,
+            &block,
+        )
+        .into())
     } else {
-        let fixture_inner = quote! { #fixture_type };
-        let fixture_impl = quote! {
-            fn into_inner(self) -> #fixture_type {
-                self.0
-            }
-        };
-        (fixture_inner, fixture_impl)
-    };
+        Ok(local_fixture(
+            vis,
+            fixture_name,
+            fixture_type,
+            args.fallible.unwrap_or(fallible),
+            fixtures,
+            test_args,
+            &sig,
+            &block,
+        )
+        .into())
+    }
+}
 
-    let convert_result = if args.fallible.unwrap_or(fallible) {
+fn global_fixture(
+    vis: Visibility,
+    fixture_name: &Ident,
+    fixture_type: proc_macro2::TokenStream,
+    fallible: bool,
+    sub_fixtures: Vec<proc_macro2::TokenStream>,
+    sub_fixtures_args: Vec<proc_macro2::TokenStream>,
+    sig: &syn::Signature,
+    block: &syn::Block,
+) -> TokenStream {
+    FIXTURE_COLLECTORS
+        .lock()
+        .unwrap()
+        .push(fixture_name.to_string());
+
+    let convert_result = if fallible {
         quote! {
             result.map(|v| v.into()).map_err(|e| ::rustest::FixtureCreationError::new(stringify!(#fixture_name), e))
         }
@@ -181,14 +212,12 @@ fn fixture_impl(
             Ok(result.into())
         }
     };
+    let sig_inputs = &sig.inputs;
+    let builder_output = &sig.output;
 
-    Ok((quote! {
+    (quote! {
         #[derive(Clone)]
-        pub struct #fixture_name(#fixture_inner);
-
-        impl #fixture_name {
-            #fixture_impl
-        }
+        #vis struct #fixture_name(std::sync::Arc<#fixture_type>);
 
         impl From<#fixture_type> for #fixture_name {
             fn from(v: #fixture_type) -> Self {
@@ -198,14 +227,23 @@ fn fixture_impl(
 
         impl ::rustest::Fixture for #fixture_name {
             fn setup(ctx: &mut ::rustest::Context) -> ::std::result::Result<Self, ::rustest::FixtureCreationError> {
-                use ::rustest::ToResult;
+                if let Some(f) = ctx.fixtures.get(&std::any::TypeId::of::<#fixture_name>()).unwrap() {
+                    let fixture = f.downcast_ref::<#fixture_name>().unwrap();
+                    return Ok(fixture.clone());
+                }
+
                 let inner_build = |#sig_inputs| #builder_output {
                     #block
                 };
 
-                #(#fixtures)*
-                let result = inner_build(#(#test_args),*);
-                #convert_result
+                #(#sub_fixtures)*
+                let result = inner_build(#(#sub_fixtures_args),*);
+                let value: #fixture_name = #convert_result?;
+
+                ctx.fixtures
+                    .insert(std::any::TypeId::of::<#fixture_name>(), Some(Box::new(value.clone())));
+                Ok(value)
+
             }
         }
 
@@ -216,7 +254,73 @@ fn fixture_impl(
             }
         }
     })
-    .into())
+    .into()
+}
+
+fn local_fixture(
+    vis: Visibility,
+    fixture_name: &Ident,
+    fixture_type: proc_macro2::TokenStream,
+    fallible: bool,
+    sub_fixtures: Vec<proc_macro2::TokenStream>,
+    sub_fixtures_args: Vec<proc_macro2::TokenStream>,
+    sig: &syn::Signature,
+    block: &syn::Block,
+) -> TokenStream {
+    let sig_inputs = &sig.inputs;
+    let builder_output = &sig.output;
+
+    let convert_result = if fallible {
+        quote! {
+            result.map(|v| v.into()).map_err(|e| ::rustest::FixtureCreationError::new(stringify!(#fixture_name), e))
+        }
+    } else {
+        quote! {
+            Ok(result.into())
+        }
+    };
+
+    (quote! {
+        #vis struct #fixture_name(#fixture_type);
+
+        impl #fixture_name where for<'a> #fixture_type: Copy {
+            pub fn into_inner(self) -> #fixture_type {
+                self.0
+            }
+        }
+
+        impl From<#fixture_type> for #fixture_name {
+            fn from(v: #fixture_type) -> Self {
+                Self(v.into())
+            }
+        }
+
+        impl ::rustest::Fixture for #fixture_name {
+            fn setup(ctx: &mut ::rustest::Context) -> ::std::result::Result<Self, ::rustest::FixtureCreationError> {
+                let inner_build = |#sig_inputs| #builder_output {
+                    #block
+                };
+
+                #(#sub_fixtures)*
+                let result = inner_build(#(#sub_fixtures_args),*);
+                #convert_result
+            }
+        }
+
+        impl std::ops::Deref for #fixture_name {
+            type Target = #fixture_type;
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl std::ops::DerefMut for #fixture_name {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+    })
+    .into()
 }
 
 #[proc_macro]

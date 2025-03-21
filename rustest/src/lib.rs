@@ -3,8 +3,10 @@ use core::any::{Any, TypeId};
 pub use libtest_mimic;
 pub use libtest_mimic::Failed;
 pub use rustest_macro::{fixture, main, test};
+use std::error::Error;
 
-pub type Result<T = ()> = std::result::Result<T, Failed>;
+pub type Result = std::result::Result<(), TestError>;
+type InnerTestResult = std::result::Result<(), Failed>;
 
 #[derive(Debug)]
 pub struct FixtureCreationError {
@@ -24,54 +26,42 @@ impl FixtureCreationError {
     }
 }
 
-pub trait ToResult<T> {
-    fn to_result(self) -> Result<T>
-    where
-        Self: Sized;
-}
+#[derive(Debug)]
+pub struct TestError(pub Box<dyn Error>);
 
-impl<T> ToResult<T> for Result<T> {
-    fn to_result(self) -> Result<T> {
-        self
-    }
-}
-
-impl<T, E> ToResult<T> for Result<::std::result::Result<T, E>>
+impl<T> From<T> for TestError
 where
-    E: Into<Failed>,
+    T: std::error::Error + 'static,
 {
-    fn to_result(self) -> Result<T> {
-        self.unwrap().map_err(|e| e.into())
+    fn from(e: T) -> Self {
+        Self(Box::new(e))
     }
 }
 
-pub trait CollectError<T> {
-    fn collect_error(self) -> Result<T>;
+pub trait CollectError {
+    fn collect_error(self) -> InnerTestResult;
 }
 
-impl<T> CollectError<T> for T {
-    fn collect_error(self) -> Result<T> {
+impl CollectError for () {
+    fn collect_error(self) -> InnerTestResult {
         Ok(self)
     }
 }
 
-impl<T, E> CollectError<T> for std::result::Result<T, E>
-where
-    E: Into<Failed>,
-{
-    fn collect_error(self) -> Result<T> {
-        self.map_err(|e| e.into())
+impl CollectError for std::result::Result<(), TestError> {
+    fn collect_error(self) -> InnerTestResult {
+        self.map(|_v| ()).map_err(|e| e.0.to_string().into())
     }
 }
 
-pub trait Fixture: Clone {
+pub trait Fixture {
     fn setup(ctx: &mut Context) -> std::result::Result<Self, FixtureCreationError>
     where
         Self: Sized;
 }
 
 pub struct Context {
-    fixtures: std::collections::HashMap<TypeId, Option<Box<dyn Any>>>,
+    pub fixtures: std::collections::HashMap<TypeId, Option<Box<dyn Any>>>,
 }
 
 impl Context {
@@ -89,18 +79,6 @@ impl Context {
     where
         T: Fixture + Any,
     {
-        if !self.fixtures.contains_key(&TypeId::of::<T>()) {
-            return T::setup(self);
-        }
-
-        if let Some(f) = self.fixtures.get(&TypeId::of::<T>()).unwrap() {
-            let fixture = f.downcast_ref::<T>().unwrap();
-            return Ok(fixture.clone());
-        }
-
-        let value = T::setup(self)?;
-        self.fixtures
-            .insert(TypeId::of::<T>(), Some(Box::new(value.clone())));
-        Ok(value)
+        T::setup(self)
     }
 }
