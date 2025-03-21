@@ -1,11 +1,15 @@
+use core::convert::From;
 use std::sync::Mutex;
 
 use darling::FromMeta;
 use darling::ast::NestedMeta;
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
-use quote::quote;
-use syn::{FnArg, ItemFn, LitStr, ReturnType, parse_macro_input};
+use quote::{quote, quote_spanned};
+use syn::{
+    AngleBracketedGenericArguments, FnArg, ItemFn, LitStr, PathArguments, ReturnType,
+    parse_macro_input, spanned::Spanned,
+};
 
 static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static FIXTURE_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -62,15 +66,52 @@ struct FixtureAttr {
     #[darling(default)]
     global: bool,
 
+    #[darling(default)]
+    fallible: Option<bool>,
+
     name: Option<Ident>,
+}
+
+fn get_fixture_type(
+    signature: &syn::Signature,
+) -> Result<(bool, proc_macro2::TokenStream), proc_macro2::TokenStream> {
+    if let ReturnType::Type(_, output_type) = &signature.output {
+        match output_type.as_ref() {
+            syn::Type::Path(type_path) => {
+                let last = type_path.path.segments.last().unwrap();
+                if last.ident.to_string() == "Result" {
+                    match &last.arguments {
+                        PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                            args,
+                            ..
+                        }) => {
+                            let ty = args.first().unwrap();
+                            Ok((true, quote! { #ty }))
+                        }
+                        _ => Err(quote_spanned! {
+                            output_type.span() =>
+                            compile_error!("Cannot detect fixture type.");
+                        }),
+                    }
+                } else {
+                    Ok((false, quote! { #output_type }))
+                }
+            }
+            _ => Ok((false, quote! {#output_type})),
+        }
+    } else {
+        Err(quote_spanned! {
+            signature.span() =>
+            compile_error!("Cannot detect fixture type.");
+        })
+    }
 }
 
 /// This macro automatically adds tests marked with #[test] to the test collection.
 /// Tests then can be run with libtest_mimic_collect::TestCollection::run().
 #[proc_macro_attribute]
 pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
-    let ItemFn { sig, block, .. } = parse_macro_input!(input as ItemFn);
-
+    let input = parse_macro_input!(input as ItemFn);
     let attr_args = match NestedMeta::parse_meta_list(args.into()) {
         Ok(v) => v,
         Err(e) => {
@@ -83,13 +124,22 @@ pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
             return TokenStream::from(e.write_errors());
         }
     };
+    match fixture_impl(args, input) {
+        Ok(output) => output,
+        Err(output) => output,
+    }
+    .into()
+}
+
+fn fixture_impl(
+    args: FixtureAttr,
+    input: ItemFn,
+) -> Result<proc_macro2::TokenStream, proc_macro2::TokenStream> {
+    let ItemFn { sig, block, .. } = input;
 
     let fixture_name = args.name.as_ref().unwrap_or(&sig.ident);
-    let fixture_type = if let ReturnType::Type(_, t) = &sig.output {
-        t.clone()
-    } else {
-        todo!()
-    };
+    let builder_output = &sig.output;
+    let (fallible, fixture_type) = get_fixture_type(&sig)?;
 
     let mut fixtures = vec![];
     let mut test_args = vec![];
@@ -133,7 +183,6 @@ pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
     };
 
     Ok((quote! {
-    (quote! {
         #[derive(Clone)]
         pub struct #fixture_name(#fixture_inner);
 
@@ -167,7 +216,7 @@ pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
             }
         }
     })
-    .into()
+    .into())
 }
 
 #[proc_macro]
@@ -203,7 +252,6 @@ pub fn main(_item: TokenStream) -> TokenStream {
 
             );)*
             let conclusion = run(&args, tests);
-            println!("End of run");
             conclusion.exit_code()
         }
     })
