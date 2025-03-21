@@ -38,11 +38,12 @@ pub fn test(_args: TokenStream, input: TokenStream) -> TokenStream {
         #sig #block
 
         fn #ctor_ident(ctx: &mut ::rustest::Context) -> ::rustest::libtest_mimic::Trial {
+            use ::rustest::CollectError;
             #(#fixtures)*
             ::rustest::libtest_mimic::Trial::test(
                     #test_name_str,
                         move || {
-                            #ident(#(#test_args),*)
+                            #ident(#(#test_args),*).into()
                     }
                 )
         }

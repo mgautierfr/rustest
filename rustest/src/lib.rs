@@ -6,6 +6,25 @@ pub use rustest_macro::{fixture, main, test};
 
 pub type Result = std::result::Result<(), Failed>;
 
+pub trait CollectError {
+    fn collect_error(self) -> Result;
+}
+
+impl CollectError for () {
+    fn collect_error(self) -> Result {
+        Ok(())
+    }
+}
+
+impl<T> CollectError for std::result::Result<(), T>
+where
+    T: Into<Failed>,
+{
+    fn collect_error(self) -> Result {
+        self.map_err(|e| e.into())
+    }
+}
+
 pub trait Fixture: Clone {
     fn setup(ctx: &mut Context) -> Self
     where
