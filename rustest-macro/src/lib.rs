@@ -102,7 +102,7 @@ pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
             .unwrap()
             .push(fixture_name.to_string());
 
-        let fixture_inner = quote! { Arc<#fixture_type> };
+        let fixture_inner = quote! { std::sync::Arc<#fixture_type> };
         let fixture_impl = quote! {};
         (fixture_inner, fixture_impl)
     } else {
@@ -139,7 +139,7 @@ pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
             }
         }
 
-        impl Deref for #fixture_name {
+        impl std::ops::Deref for #fixture_name {
             type Target = #fixture_type;
             fn deref(&self) -> &Self::Target {
                 &self.0
@@ -163,12 +163,12 @@ pub fn main(_item: TokenStream) -> TokenStream {
             .collect();
 
     (quote! {
-        fn main() -> ExitCode {
+        fn main() -> std::process::ExitCode {
             use ::rustest::libtest_mimic::{Arguments, Trial, run};
             let args = Arguments::from_args();
 
             let mut context = ::rustest::Context::new();
-            #(context.register_fixture(TypeId::of::<#global_fixture_types>());)*
+            #(context.register_fixture(std::any::TypeId::of::<#global_fixture_types>());)*
 
             let mut tests = vec![];
             #(tests.push(#test_ctors(&mut context));)*
