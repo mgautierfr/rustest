@@ -10,6 +10,12 @@ use syn::{FnArg, ItemFn, LitStr, ReturnType, parse_macro_input};
 static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static FIXTURE_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
+fn build_fixture_create(pat: &syn::Pat, ty: &syn::Type) -> proc_macro2::TokenStream {
+    quote! {
+        let #pat = ctx.get_fixture()?;
+    }
+}
+
 /// This macro automatically adds tests function marked with #[test] to the test collection.
 #[proc_macro_attribute]
 pub fn test(_args: TokenStream, input: TokenStream) -> TokenStream {
@@ -27,7 +33,7 @@ pub fn test(_args: TokenStream, input: TokenStream) -> TokenStream {
     sig.inputs.iter().for_each(|fnarg| {
         if let FnArg::Typed(fnarg) = fnarg {
             let pat = &fnarg.pat;
-            fixtures.push(quote! {let #pat = ctx.get_fixture();});
+            fixtures.push(build_fixture_create(pat, &fnarg.ty));
             test_args.push(quote! {#pat});
         }
     });
@@ -37,15 +43,15 @@ pub fn test(_args: TokenStream, input: TokenStream) -> TokenStream {
     (quote! {
         #sig #block
 
-        fn #ctor_ident(ctx: &mut ::rustest::Context) -> ::rustest::libtest_mimic::Trial {
+        fn #ctor_ident(ctx: &mut ::rustest::Context) -> ::std::result::Result<::rustest::libtest_mimic::Trial, ::rustest::FixtureCreationError> {
             use ::rustest::CollectError;
             #(#fixtures)*
-            ::rustest::libtest_mimic::Trial::test(
-                    #test_name_str,
-                        move || {
-                            #ident(#(#test_args),*).into()
-                    }
-                )
+            Ok(::rustest::libtest_mimic::Trial::test(
+                #test_name_str,
+                    move || {
+                        #ident(#(#test_args),*).into()
+                }
+            ))
         }
     })
     .into()
@@ -92,7 +98,7 @@ pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
     sig.inputs.iter().for_each(|fnarg| {
         if let FnArg::Typed(fnarg) = fnarg {
             let pat = &fnarg.pat;
-            fixtures.push(quote! {let #pat = ctx.get_fixture();});
+            fixtures.push(build_fixture_create(pat, &fnarg.ty));
             test_args.push(quote! {#pat});
         }
     });
@@ -115,6 +121,18 @@ pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
         };
         (fixture_inner, fixture_impl)
     };
+
+    let convert_result = if args.fallible.unwrap_or(fallible) {
+        quote! {
+            result.map(|v| v.into()).map_err(|e| ::rustest::FixtureCreationError::new(stringify!(#fixture_name), e))
+        }
+    } else {
+        quote! {
+            Ok(result.into())
+        }
+    };
+
+    Ok((quote! {
     (quote! {
         #[derive(Clone)]
         pub struct #fixture_name(#fixture_inner);
@@ -130,13 +148,15 @@ pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
         }
 
         impl ::rustest::Fixture for #fixture_name {
-            fn setup(ctx: &mut ::rustest::Context) -> Self {
-                let inner_build = |#sig_inputs| {
+            fn setup(ctx: &mut ::rustest::Context) -> ::std::result::Result<Self, ::rustest::FixtureCreationError> {
+                use ::rustest::ToResult;
+                let inner_build = |#sig_inputs| #builder_output {
                     #block
                 };
 
                 #(#fixtures)*
-                inner_build(#(#test_args),*).into()
+                let result = inner_build(#(#test_args),*);
+                #convert_result
             }
         }
 
@@ -172,7 +192,16 @@ pub fn main(_item: TokenStream) -> TokenStream {
             #(context.register_fixture(std::any::TypeId::of::<#global_fixture_types>());)*
 
             let mut tests = vec![];
-            #(tests.push(#test_ctors(&mut context));)*
+            #(tests.push(
+                match #test_ctors(&mut context) {
+                    Ok(test) => test,
+                    Err(e) => {
+                        eprintln!("Failed to create fixture {}: {}", e.fixture_name, e.error);
+                        return std::process::ExitCode::FAILURE;
+                    }
+                }
+
+            );)*
             let conclusion = run(&args, tests);
             println!("End of run");
             conclusion.exit_code()
