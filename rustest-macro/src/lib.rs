@@ -85,12 +85,17 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
         fn #ctor_ident(ctx: &mut ::rustest::Context) -> ::std::result::Result<::rustest::libtest_mimic::Trial, ::rustest::FixtureCreationError> {
             use ::rustest::IntoError;
             #(#fixtures)*
-            Ok(::rustest::libtest_mimic::Trial::test(
+            let trial = ::rustest::libtest_mimic::Trial::test(
                 #test_name_str,
                 move || {
                     ::rustest::run_test(|| {#ident(#(#test_args),*).into_error()}, #is_xfail)
                 }
-            ))
+            );
+            if #is_xfail {
+                Ok(trial.with_kind("XFAIL"))
+            } else {
+                Ok(trial)
+            }
         }
     })
     .into()
