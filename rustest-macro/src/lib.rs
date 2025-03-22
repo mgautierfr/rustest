@@ -373,6 +373,10 @@ pub fn main(_item: TokenStream) -> TokenStream {
             .collect();
 
     (quote! {
+        const TEST_CTORS: &[fn (&mut ::rustest::Context) -> ::std::result::Result<::rustest::libtest_mimic::Trial, ::rustest::FixtureCreationError>] = &[
+            #(#test_ctors),*
+        ];
+
         fn main() -> std::process::ExitCode {
             use ::rustest::libtest_mimic::{Arguments, Trial, run};
             let args = Arguments::from_args();
@@ -380,17 +384,20 @@ pub fn main(_item: TokenStream) -> TokenStream {
             let mut context = ::rustest::Context::new();
             #(context.register_fixture(std::any::TypeId::of::<#global_fixture_types>());)*
 
-            let mut tests = vec![];
-            #(tests.push(
-                match #test_ctors(&mut context) {
-                    Ok(test) => test,
-                    Err(e) => {
-                        eprintln!("Failed to create fixture {}: {}", e.fixture_name, e.error);
-                        return std::process::ExitCode::FAILURE;
-                    }
-                }
+            let tests = TEST_CTORS
+                .iter()
+                .map(|test_ctor| {
+                    test_ctor(&mut context)
+                })
+                .collect();
 
-            );)*
+            let tests = match tests {
+                Ok(test) => test,
+                Err(e) => {
+                    eprintln!("Failed to create fixture {}: {}", e.fixture_name, e.error);
+                    return std::process::ExitCode::FAILURE;
+                }
+            };
             let conclusion = run(&args, tests);
             conclusion.exit_code()
         }
