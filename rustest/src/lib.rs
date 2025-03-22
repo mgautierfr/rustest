@@ -61,7 +61,7 @@ pub trait Fixture {
 }
 
 pub struct Context {
-    pub fixtures: std::collections::HashMap<TypeId, Option<Box<dyn Any>>>,
+    pub fixtures: std::collections::HashMap<TypeId, Box<dyn Any>>,
 }
 
 impl Context {
@@ -69,10 +69,6 @@ impl Context {
         Self {
             fixtures: Default::default(),
         }
-    }
-
-    pub fn register_fixture(&mut self, id: TypeId) {
-        self.fixtures.insert(id, None);
     }
 
     pub fn get_fixture<T>(&mut self) -> std::result::Result<T, FixtureCreationError>

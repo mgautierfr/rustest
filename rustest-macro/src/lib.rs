@@ -12,7 +12,6 @@ use syn::{
 };
 
 static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
-static FIXTURE_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 fn build_fixture_create(pat: &syn::Ident) -> proc_macro2::TokenStream {
     quote! {
@@ -234,11 +233,6 @@ fn global_fixture(
     sig: &syn::Signature,
     block: &syn::Block,
 ) -> TokenStream {
-    FIXTURE_COLLECTORS
-        .lock()
-        .unwrap()
-        .push(fixture_name.to_string());
-
     let convert_result = if fallible {
         quote! {
             result.map(|v| v.into()).map_err(|e| ::rustest::FixtureCreationError::new(stringify!(#fixture_name), e))
@@ -263,7 +257,7 @@ fn global_fixture(
 
         impl ::rustest::Fixture for #fixture_name {
             fn setup(ctx: &mut ::rustest::Context) -> ::std::result::Result<Self, ::rustest::FixtureCreationError> {
-                if let Some(f) = ctx.fixtures.get(&std::any::TypeId::of::<#fixture_name>()).unwrap() {
+                if let Some(f) = ctx.fixtures.get(&std::any::TypeId::of::<#fixture_name>()) {
                     let fixture = f.downcast_ref::<#fixture_name>().unwrap();
                     return Ok(fixture.clone());
                 }
@@ -277,7 +271,7 @@ fn global_fixture(
                 let value: #fixture_name = #convert_result?;
 
                 ctx.fixtures
-                    .insert(std::any::TypeId::of::<#fixture_name>(), Some(Box::new(value.clone())));
+                    .insert(std::any::TypeId::of::<#fixture_name>(), Box::new(value.clone()));
                 Ok(value)
 
             }
@@ -361,11 +355,6 @@ fn local_fixture(
 
 #[proc_macro]
 pub fn main(_item: TokenStream) -> TokenStream {
-    let global_fixture_types: Vec<_> =
-        std::mem::take::<Vec<String>>(FIXTURE_COLLECTORS.lock().unwrap().as_mut())
-            .into_iter()
-            .map(|s| Ident::new(&s, Span::call_site()))
-            .collect();
     let test_ctors: Vec<_> =
         std::mem::take::<Vec<String>>(TEST_COLLECTORS.lock().unwrap().as_mut())
             .into_iter()
@@ -382,7 +371,6 @@ pub fn main(_item: TokenStream) -> TokenStream {
             let args = Arguments::from_args();
 
             let mut context = ::rustest::Context::new();
-            #(context.register_fixture(std::any::TypeId::of::<#global_fixture_types>());)*
 
             let tests = TEST_CTORS
                 .iter()
