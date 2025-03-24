@@ -3,6 +3,7 @@ use core::{
     any::{Any, TypeId},
     clone::Clone,
     fmt::Debug,
+    ops::Deref,
     panic::{RefUnwindSafe, UnwindSafe},
 };
 use std::sync::Arc;
@@ -25,8 +26,9 @@ impl FixtureCreationError {
     }
 }
 
-pub trait Fixture {
+pub trait Fixture: Deref<Target = Self::Type> + 'static {
     type InnerType;
+    type Type;
     fn setup(ctx: &mut TestContext) -> std::result::Result<Self, FixtureCreationError>
     where
         Self: Sized;

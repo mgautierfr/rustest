@@ -1,4 +1,4 @@
-use core::{convert::From, unreachable};
+use core::{convert::From, todo, unreachable};
 use std::sync::Mutex;
 
 use darling::FromMeta;
@@ -7,8 +7,8 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::{quote, quote_spanned};
 use syn::{
-    AngleBracketedGenericArguments, Attribute, FnArg, ItemFn, LitStr, PathArguments, ReturnType,
-    parse_macro_input, spanned::Spanned,
+    AngleBracketedGenericArguments, Attribute, FnArg, GenericParam, ItemFn, LitStr, PathArguments,
+    ReturnType, TypeParam, parse_macro_input, spanned::Spanned,
 };
 
 static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -178,6 +178,9 @@ fn fixture_impl(
     } = input;
 
     let fixture_name = args.name.as_ref().unwrap_or(&sig.ident);
+    let fixture_generics = &sig.generics;
+    let (impl_generics, ty_generics, where_clause) = fixture_generics.split_for_impl();
+    let where_preticate = where_clause.as_ref().map(|wc| &wc.predicates);
     let (fallible, fixture_type) = get_fixture_type(&sig)?;
     let fallible = args.fallible.unwrap_or(fallible);
     let (shared, scope) = args
@@ -228,19 +231,48 @@ fn fixture_impl(
         .map(|expr| quote! { Some(Box::new(#expr)) })
         .unwrap_or_else(|| quote! { None });
 
-    Ok(quote! {
-        #[derive(Debug)]
-        #vis struct #fixture_name(#inner_wrapper<#fixture_type>);
+    let mut phantom_markers = vec![];
+    let mut phantom_builders = vec![];
+    for (i, param) in sig.generics.params.iter().enumerate() {
+        let phantom_name = format!("__phantom_{}", i);
+        let phantom_ident = Ident::new(&phantom_name, Span::call_site());
+        let phantom_type = match param {
+            GenericParam::Type(TypeParam { ident, .. }) => ident,
+            _ => todo!(),
+        };
+        phantom_markers.push(quote! {
+          #phantom_ident: std::marker::PhantomData<#phantom_type>
+        });
+        phantom_builders.push(quote! { #phantom_ident: Default::default() });
+    }
 
-        impl Clone for #fixture_name where for<'a> #inner_wrapper<#fixture_type>: Clone
-        {
-            fn clone(&self) -> Self {
-                Self(self.0.clone())
+    Ok(quote! {
+        #vis struct #fixture_name #fixture_generics #where_clause {
+            inner: #inner_wrapper<#fixture_type>,
+            #(#phantom_markers),*
+        }
+
+        impl #impl_generics #fixture_name #ty_generics #where_clause {
+            fn new(inner: #inner_wrapper<#fixture_type>) -> Self {
+                Self{
+                    inner,
+                    #(#phantom_builders),*
+                }
             }
         }
 
-        impl ::rustest::Fixture for #fixture_name {
+        impl #impl_generics Clone for #fixture_name #ty_generics where for<'a> #inner_wrapper<#fixture_type>: Clone,
+          #where_preticate
+
+        {
+            fn clone(&self) -> Self {
+                Self::new(self.inner.clone())
+            }
+        }
+
+        impl #impl_generics ::rustest::Fixture for #fixture_name #ty_generics  #where_clause {
             type InnerType = #inner_wrapper<#fixture_type>;
+            type Type = #fixture_type;
             fn setup(ctx: &mut ::rustest::TestContext) -> ::std::result::Result<Self, ::rustest::FixtureCreationError> {
                 let builder = |ctx: &mut ::rustest::TestContext| {
                     let user_provided_setup = |#sig_inputs| #builder_output {
@@ -252,22 +284,26 @@ fn fixture_impl(
                     #convert_result
                 };
 
-                Ok(Self(Self::InnerType::build::<Self, _>(ctx, builder, #teardown)?))
+                Ok(Self::new(Self::InnerType::build::<Self, _>(ctx, builder, #teardown)?))
             }
 
             fn scope() -> ::rustest::FixtureScope { #scope }
         }
 
-        impl ::std::ops::Deref for #fixture_name {
-            type Target = #fixture_type;
+        impl #impl_generics ::std::ops::Deref for #fixture_name #ty_generics  #where_clause{
+            type Target = <Self as Fixture>::Type;
             fn deref(&self) -> &Self::Target {
-                &self.0
+                &self.inner
             }
         }
 
-        impl ::std::ops::DerefMut for #fixture_name where for<'a> #inner_wrapper<#fixture_type> : ::std::ops::DerefMut{
+        impl #impl_generics ::std::ops::DerefMut for #fixture_name #ty_generics
+          where
+          for<'a> #inner_wrapper<#fixture_type> : ::std::ops::DerefMut,
+          #where_preticate
+        {
             fn deref_mut(&mut self) -> &mut Self::Target {
-                &mut self.0
+                self.inner.deref_mut()
             }
         }
     })

@@ -1,7 +1,7 @@
 use core::{assert_eq, sync::atomic::AtomicU32};
 use std::process::Stdio;
 
-use rustest::{Result, fixture, main, test};
+use rustest::{Fixture, Result, fixture, main, test};
 
 // Tests are simply marked with #[test], as any classic rust integration tests
 #[test]
@@ -154,7 +154,7 @@ fn Double(source: IncNumber) -> u32 {
 
 // So Double is the double of a new IncNumber, so (previous incNumber + 1)*2
 #[test]
-fn test_double(a_number: IncNumber, its_double: Double) {
+fn test_double_unique(a_number: IncNumber, its_double: Double) {
     assert_eq!((*a_number + 1) * 2, *its_double);
 }
 
@@ -169,8 +169,30 @@ fn DoubleLocal(source: IncNumberLocal) -> u32 {
 }
 
 #[test]
-fn test_local(a_number: IncNumberLocal, its_double: DoubleLocal) {
+fn test_double_local(a_number: IncNumberLocal, its_double: DoubleLocal) {
     assert_eq!(*a_number * 2, *its_double);
 }
 
+// Fixture can be generic by other fixtures.
+// This fixture need a fixture source of type u32 and return its double,
+// but the exact type of the source is not known yet.
+#[fixture]
+fn DoubleGeneric<Source>(source: Source) -> u32
+where
+    Source: Fixture<Type = u32>,
+{
+    *source * 2
+}
+
+// This is equivalent to test `test_double_unique` but using generic
+#[test]
+fn test_double_unique_gen(a_number: IncNumber, its_double: DoubleGeneric<IncNumber>) {
+    assert_eq!((*a_number + 1) * 2, *its_double);
+}
+
+// This is equivalent to test `test_double_local` but using generic
+#[test]
+fn test_double_local_gen(a_number: IncNumberLocal, its_double: DoubleGeneric<IncNumberLocal>) {
+    assert_eq!(*a_number * 2, *its_double);
+}
 main! {}
