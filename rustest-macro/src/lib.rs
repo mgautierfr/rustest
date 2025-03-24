@@ -81,7 +81,7 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
     (quote! {
         #sig #block
 
-        fn #ctor_ident(ctx: &mut ::rustest::Context) -> ::std::result::Result<::rustest::Test, ::rustest::FixtureCreationError> {
+        fn #ctor_ident(ctx: &mut ::rustest::FixtureRegistry) -> ::std::result::Result<::rustest::Test, ::rustest::FixtureCreationError> {
             use ::rustest::IntoError;
             #(#fixtures)*
             let runner = || {#ident(#(#test_args),*).into_error()};
@@ -247,7 +247,7 @@ fn global_fixture(
         }
 
         impl ::rustest::Fixture for #fixture_name {
-            fn setup(ctx: &mut ::rustest::Context) -> ::std::result::Result<Self, ::rustest::FixtureCreationError> {
+            fn setup(ctx: &mut ::rustest::FixtureRegistry) -> ::std::result::Result<Self, ::rustest::FixtureCreationError> {
                 if let Some(f) = ctx.fixtures.get(&std::any::TypeId::of::<#fixture_name>()) {
                     let fixture = f.downcast_ref::<#fixture_name>().unwrap();
                     return Ok(fixture.clone());
@@ -317,7 +317,7 @@ fn local_fixture(
         }
 
         impl ::rustest::Fixture for #fixture_name {
-            fn setup(ctx: &mut ::rustest::Context) -> ::std::result::Result<Self, ::rustest::FixtureCreationError> {
+            fn setup(ctx: &mut ::rustest::FixtureRegistry) -> ::std::result::Result<Self, ::rustest::FixtureCreationError> {
                 let inner_build = |#sig_inputs| #builder_output {
                     #block
                 };
@@ -353,7 +353,7 @@ pub fn main(_item: TokenStream) -> TokenStream {
             .collect();
 
     (quote! {
-        const TEST_CTORS: &[fn (&mut ::rustest::Context) -> ::std::result::Result<::rustest::Test, ::rustest::FixtureCreationError>] = &[
+        const TEST_CTORS: &[fn (&mut ::rustest::FixtureRegistry) -> ::std::result::Result<::rustest::Test, ::rustest::FixtureCreationError>] = &[
             #(#test_ctors),*
         ];
 
@@ -361,7 +361,7 @@ pub fn main(_item: TokenStream) -> TokenStream {
             use ::rustest::libtest_mimic::{Arguments, Trial, run};
             let args = Arguments::from_args();
 
-            let mut context = ::rustest::Context::new();
+            let mut context = ::rustest::FixtureRegistry::new();
 
             let tests: ::std::result::Result<_, ::rustest::FixtureCreationError> = TEST_CTORS
                 .iter()

@@ -19,16 +19,16 @@ impl FixtureCreationError {
 }
 
 pub trait Fixture {
-    fn setup(ctx: &mut Context) -> std::result::Result<Self, FixtureCreationError>
+    fn setup(ctx: &mut FixtureRegistry) -> std::result::Result<Self, FixtureCreationError>
     where
         Self: Sized;
 }
 
-pub struct Context {
+pub struct FixtureRegistry {
     pub fixtures: std::collections::HashMap<TypeId, Box<dyn Any>>,
 }
 
-impl Context {
+impl FixtureRegistry {
     pub fn new() -> Self {
         Self {
             fixtures: Default::default(),
