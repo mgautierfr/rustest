@@ -145,4 +145,32 @@ fn test_with_process(a_process: RunningProcess) -> Result {
     Ok(())
 }
 
+// By default, a new fixtures is created each time we request it.
+// So Double get a new number and returns is double
+#[fixture]
+fn Double(source: IncNumber) -> u32 {
+    *source * 2
+}
+
+// So Double is the double of a new IncNumber, so (previous incNumber + 1)*2
+#[test]
+fn test_double(a_number: IncNumber, its_double: Double) {
+    assert_eq!((*a_number + 1) * 2, *its_double);
+}
+
+// We can for a fixture to be instanciated only once per test
+#[fixture(scope=test)]
+fn IncNumberLocal(source: IncNumber) -> u32 {
+    *source
+}
+#[fixture]
+fn DoubleLocal(source: IncNumberLocal) -> u32 {
+    *source * 2
+}
+
+#[test]
+fn test_local(a_number: IncNumberLocal, its_double: DoubleLocal) {
+    assert_eq!(*a_number * 2, *its_double);
+}
+
 main! {}

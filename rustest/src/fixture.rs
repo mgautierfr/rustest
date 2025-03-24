@@ -1,3 +1,4 @@
+use super::TestContext;
 use core::{
     any::{Any, TypeId},
     clone::Clone,
@@ -26,9 +27,24 @@ impl FixtureCreationError {
 
 pub trait Fixture {
     type InnerType;
-    fn setup(ctx: &mut FixtureRegistry) -> std::result::Result<Self, FixtureCreationError>
+    fn setup(ctx: &mut TestContext) -> std::result::Result<Self, FixtureCreationError>
     where
         Self: Sized;
+
+    fn scope() -> FixtureScope;
+}
+
+pub enum FixtureScope {
+    Unique,
+    Test,
+    Global,
+}
+
+pub fn get_fixture<Fix>(ctx: &mut TestContext) -> std::result::Result<Fix, FixtureCreationError>
+where
+    Fix: Fixture + Any,
+{
+    ctx.get_fixture()
 }
 
 pub struct FixtureRegistry {
@@ -60,13 +76,6 @@ impl FixtureRegistry {
             let fixture = a.downcast_ref::<F::InnerType>().unwrap();
             fixture.clone()
         })
-    }
-
-    pub fn get_fixture<Fix>(&mut self) -> std::result::Result<Fix, FixtureCreationError>
-    where
-        Fix: Fixture + Any,
-    {
-        Fix::setup(self)
     }
 }
 
@@ -114,6 +123,7 @@ impl<T> Drop for FixtureTeardown<T> {
 }
 
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct SharedFixtureValue<T>(Arc<FixtureTeardown<T>>);
 
 impl<T> Clone for SharedFixtureValue<T> {
@@ -124,13 +134,13 @@ impl<T> Clone for SharedFixtureValue<T> {
 
 impl<T: 'static> SharedFixtureValue<T> {
     pub fn build<Fx, Builder>(
-        ctx: &mut FixtureRegistry,
+        ctx: &mut TestContext,
         f: Builder,
         teardown: Option<Box<TeardownFn<T>>>,
     ) -> std::result::Result<Self, FixtureCreationError>
     where
         Fx: Fixture<InnerType = Self> + 'static,
-        Builder: Fn(&mut FixtureRegistry) -> std::result::Result<T, FixtureCreationError>,
+        Builder: Fn(&mut TestContext) -> std::result::Result<T, FixtureCreationError>,
     {
         if let Some(f) = ctx.get::<Fx>() {
             return Ok(f);
@@ -153,17 +163,18 @@ impl<T> std::ops::Deref for SharedFixtureValue<T> {
 }
 
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct UniqueFixtureValue<T>(FixtureTeardown<T>);
 
 impl<T: 'static> UniqueFixtureValue<T> {
     pub fn build<F, Builder>(
-        ctx: &mut FixtureRegistry,
+        ctx: &mut TestContext,
         f: Builder,
         teardown: Option<Box<TeardownFn<T>>>,
     ) -> std::result::Result<Self, FixtureCreationError>
     where
         F: Fixture<InnerType = Self> + 'static,
-        Builder: Fn(&mut FixtureRegistry) -> std::result::Result<T, FixtureCreationError>,
+        Builder: Fn(&mut TestContext) -> std::result::Result<T, FixtureCreationError>,
     {
         let value = UniqueFixtureValue(FixtureTeardown {
             value: f(ctx)?,

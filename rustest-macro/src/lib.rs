@@ -15,7 +15,7 @@ static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 fn build_fixture_create(pat: &syn::Ident) -> proc_macro2::TokenStream {
     quote! {
-        let #pat = ctx.get_fixture()?;
+        let #pat = ::rustest::get_fixture(ctx)?;
     }
 }
 
@@ -81,28 +81,17 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
     (quote! {
         #sig #block
 
-        fn #ctor_ident(ctx: &mut ::rustest::FixtureRegistry) -> ::std::result::Result<::rustest::Test, ::rustest::FixtureCreationError> {
+        fn #ctor_ident(global_reg: &mut ::rustest::FixtureRegistry) -> ::std::result::Result<::rustest::Test, ::rustest::FixtureCreationError> {
             use ::rustest::IntoError;
+            let mut test_registry = ::rustest::FixtureRegistry::new();
+            let mut ctx = ::rustest::TestContext::new(global_reg, &mut test_registry);
+            let ctx = &mut ctx;
             #(#fixtures)*
             let runner = || {#ident(#(#test_args),*).into_error()};
             Ok(::rustest::Test::new(#test_name_str, #is_xfail, runner))
         }
     })
     .into()
-}
-
-#[derive(FromMeta)]
-#[darling(rename_all = "snake_case")]
-enum FixtureScope {
-    Unique,
-    Test,
-    Global,
-}
-
-impl Default for FixtureScope {
-    fn default() -> Self {
-        FixtureScope::Unique
-    }
 }
 
 #[derive(FromMeta)]
@@ -166,6 +155,7 @@ pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
             return TokenStream::from(darling::Error::from(e).write_errors());
         }
     };
+
     let args = match FixtureAttr::from_list(&attr_args) {
         Ok(v) => v,
         Err(e) => {
@@ -190,15 +180,15 @@ fn fixture_impl(
     let fixture_name = args.name.as_ref().unwrap_or(&sig.ident);
     let (fallible, fixture_type) = get_fixture_type(&sig)?;
     let fallible = args.fallible.unwrap_or(fallible);
-    let scope = args
+    let (shared, scope) = args
         .scope
         .map(|s| match s.to_string().as_str() {
-            "unique" => FixtureScope::Unique,
-            "test" => FixtureScope::Test,
-            "global" => FixtureScope::Global,
+            "unique" => (false, quote! {::rustest::FixtureScope::Unique}),
+            "test" => (true, quote! {::rustest::FixtureScope::Test}),
+            "global" => (true, quote! {::rustest::FixtureScope::Global}),
             _ => todo!(),
         })
-        .unwrap_or(FixtureScope::Unique);
+        .unwrap_or((false, quote! { ::rustest::FixtureScope::Unique}));
 
     let mut sub_fixtures = vec![];
     let mut sub_fixtures_args = vec![];
@@ -225,10 +215,10 @@ fn fixture_impl(
         }
     };
 
-    let inner_wrapper = if let FixtureScope::Unique = scope {
-        quote! { ::rustest::UniqueFixtureValue }
-    } else {
+    let inner_wrapper = if shared {
         quote! { ::rustest::SharedFixtureValue }
+    } else {
+        quote! { ::rustest::UniqueFixtureValue }
     };
     let sig_inputs = &sig.inputs;
     let builder_output = &sig.output;
@@ -251,8 +241,8 @@ fn fixture_impl(
 
         impl ::rustest::Fixture for #fixture_name {
             type InnerType = #inner_wrapper<#fixture_type>;
-            fn setup(ctx: &mut ::rustest::FixtureRegistry) -> ::std::result::Result<Self, ::rustest::FixtureCreationError> {
-                let builder = |ctx: &mut ::rustest::FixtureRegistry| {
+            fn setup(ctx: &mut ::rustest::TestContext) -> ::std::result::Result<Self, ::rustest::FixtureCreationError> {
+                let builder = |ctx: &mut ::rustest::TestContext| {
                     let user_provided_setup = |#sig_inputs| #builder_output {
                         #block
                     };
@@ -264,6 +254,8 @@ fn fixture_impl(
 
                 Ok(Self(Self::InnerType::build::<Self, _>(ctx, builder, #teardown)?))
             }
+
+            fn scope() -> ::rustest::FixtureScope { #scope }
         }
 
         impl ::std::ops::Deref for #fixture_name {
@@ -298,12 +290,12 @@ pub fn main(_item: TokenStream) -> TokenStream {
             use ::rustest::libtest_mimic::{Arguments, Trial, run};
             let args = Arguments::from_args();
 
-            let mut context = ::rustest::FixtureRegistry::new();
+            let mut global_registry = ::rustest::FixtureRegistry::new();
 
             let tests: ::std::result::Result<_, ::rustest::FixtureCreationError> = TEST_CTORS
                 .iter()
                 .map(|test_ctor| {
-                    Ok(test_ctor(&mut context)?.into())
+                    Ok(test_ctor(&mut global_registry)?.into())
                 })
                 .collect();
 

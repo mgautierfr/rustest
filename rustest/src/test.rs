@@ -4,6 +4,9 @@ use std::error::Error;
 pub type Result = std::result::Result<(), TestError>;
 type InnerTestResult = std::result::Result<(), Failed>;
 
+use super::{Fixture, FixtureCreationError, FixtureRegistry, FixtureScope};
+use std::any::Any;
+
 #[derive(Debug)]
 pub struct TestError(pub Box<dyn Error>);
 
@@ -85,5 +88,48 @@ impl From<Test> for libtest_mimic::Trial {
         } else {
             mimic_test
         }
+    }
+}
+
+pub struct TestContext<'a> {
+    global_reg: &'a mut FixtureRegistry,
+    reg: &'a mut FixtureRegistry,
+}
+
+impl<'a> TestContext<'a> {
+    pub fn new(global_reg: &'a mut FixtureRegistry, reg: &'a mut FixtureRegistry) -> Self {
+        Self { global_reg, reg }
+    }
+    pub fn add<F>(&mut self, value: &F::InnerType)
+    where
+        F: Fixture + 'static,
+        F::InnerType: Clone + 'static,
+    {
+        let reg = match F::scope() {
+            FixtureScope::Test => &mut self.reg,
+            FixtureScope::Global => &mut self.global_reg,
+            _ => unreachable!(),
+        };
+        reg.add::<F>(value)
+    }
+
+    pub fn get<F>(&mut self) -> Option<F::InnerType>
+    where
+        F: Fixture + 'static,
+        F::InnerType: Clone + 'static,
+    {
+        let reg = match F::scope() {
+            FixtureScope::Test => &mut self.reg,
+            FixtureScope::Global => &mut self.global_reg,
+            _ => unreachable!(),
+        };
+        reg.get::<F>()
+    }
+
+    pub fn get_fixture<Fix>(&mut self) -> std::result::Result<Fix, FixtureCreationError>
+    where
+        Fix: Fixture + Any,
+    {
+        Fix::setup(self)
     }
 }
