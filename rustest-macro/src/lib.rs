@@ -81,20 +81,11 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
     (quote! {
         #sig #block
 
-        fn #ctor_ident(ctx: &mut ::rustest::Context) -> ::std::result::Result<::rustest::libtest_mimic::Trial, ::rustest::FixtureCreationError> {
+        fn #ctor_ident(ctx: &mut ::rustest::Context) -> ::std::result::Result<::rustest::Test, ::rustest::FixtureCreationError> {
             use ::rustest::IntoError;
             #(#fixtures)*
-            let trial = ::rustest::libtest_mimic::Trial::test(
-                #test_name_str,
-                move || {
-                    ::rustest::run_test(|| {#ident(#(#test_args),*).into_error()}, #is_xfail)
-                }
-            );
-            if #is_xfail {
-                Ok(trial.with_kind("XFAIL"))
-            } else {
-                Ok(trial)
-            }
+            let runner = || {#ident(#(#test_args),*).into_error()};
+            Ok(::rustest::Test::new(#test_name_str, #is_xfail, runner))
         }
     })
     .into()
@@ -362,7 +353,7 @@ pub fn main(_item: TokenStream) -> TokenStream {
             .collect();
 
     (quote! {
-        const TEST_CTORS: &[fn (&mut ::rustest::Context) -> ::std::result::Result<::rustest::libtest_mimic::Trial, ::rustest::FixtureCreationError>] = &[
+        const TEST_CTORS: &[fn (&mut ::rustest::Context) -> ::std::result::Result<::rustest::Test, ::rustest::FixtureCreationError>] = &[
             #(#test_ctors),*
         ];
 
@@ -372,10 +363,10 @@ pub fn main(_item: TokenStream) -> TokenStream {
 
             let mut context = ::rustest::Context::new();
 
-            let tests = TEST_CTORS
+            let tests: ::std::result::Result<_, ::rustest::FixtureCreationError> = TEST_CTORS
                 .iter()
                 .map(|test_ctor| {
-                    test_ctor(&mut context)
+                    Ok(test_ctor(&mut context)?.into())
                 })
                 .collect();
 

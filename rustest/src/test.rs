@@ -32,29 +32,58 @@ impl IntoError for std::result::Result<(), TestError> {
     }
 }
 
-pub fn run_test<F>(f: F, xfail: bool) -> InnerTestResult
-where
-    F: FnOnce() -> InnerTestResult + std::panic::UnwindSafe,
-{
-    let test_result = match ::std::panic::catch_unwind(f) {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(e)) => Err(e),
-        Err(cause) => {
-            // We expect the cause payload to be a string or 'str
-            let payload = cause
-                .downcast_ref::<String>()
-                .map(|s| s.clone())
-                .or(cause.downcast_ref::<&str>().map(|s| s.to_string()))
-                .unwrap_or(format!("{:?}", cause));
-            Err(payload.into())
+pub struct Test {
+    name: String,
+    runner: Box<dyn FnOnce() -> InnerTestResult + Send>,
+    xfail: bool,
+}
+
+impl Test {
+    pub fn new<F>(name: impl Into<String>, xfail: bool, runner: F) -> Self
+    where
+        F: FnOnce() -> InnerTestResult + Send + std::panic::UnwindSafe + 'static,
+    {
+        Self {
+            name: name.into(),
+            xfail,
+            runner: Box::new(runner),
         }
-    };
-    if xfail {
-        match test_result {
-            Ok(_) => Err("Test should fail".into()),
-            Err(_) => Ok(()),
+    }
+    fn run(self) -> InnerTestResult {
+        let test_result =
+            match ::std::panic::catch_unwind(std::panic::AssertUnwindSafe(self.runner)) {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(e)) => Err(e),
+                Err(cause) => {
+                    // We expect the cause payload to be a string or 'str
+                    let payload = cause
+                        .downcast_ref::<String>()
+                        .map(|s| s.clone())
+                        .or(cause.downcast_ref::<&str>().map(|s| s.to_string()))
+                        .unwrap_or(format!("{:?}", cause));
+                    Err(payload.into())
+                }
+            };
+        if self.xfail {
+            match test_result {
+                Ok(_) => Err("Test should fail".into()),
+                Err(_) => Ok(()),
+            }
+        } else {
+            test_result
         }
-    } else {
-        test_result
+    }
+}
+
+impl From<Test> for libtest_mimic::Trial {
+    fn from(test: Test) -> Self {
+        let xfail = test.xfail;
+        let mimic_test = Self::test(test.name.clone(), move || test.run());
+
+        if xfail {
+            mimic_test.with_kind("XFAIL")
+        } else {
+            mimic_test
+        }
     }
 }
