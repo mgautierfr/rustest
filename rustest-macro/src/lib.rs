@@ -92,9 +92,23 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 #[derive(FromMeta)]
+#[darling(rename_all = "snake_case")]
+enum FixtureScope {
+    Unique,
+    Test,
+    Global,
+}
+
+impl Default for FixtureScope {
+    fn default() -> Self {
+        FixtureScope::Unique
+    }
+}
+
+#[derive(FromMeta)]
 struct FixtureAttr {
     #[darling(default)]
-    global: bool,
+    scope: Option<Ident>,
 
     #[darling(default)]
     fallible: Option<bool>,
@@ -176,6 +190,15 @@ fn fixture_impl(
     let fixture_name = args.name.as_ref().unwrap_or(&sig.ident);
     let (fallible, fixture_type) = get_fixture_type(&sig)?;
     let fallible = args.fallible.unwrap_or(fallible);
+    let scope = args
+        .scope
+        .map(|s| match s.to_string().as_str() {
+            "unique" => FixtureScope::Unique,
+            "test" => FixtureScope::Test,
+            "global" => FixtureScope::Global,
+            _ => todo!(),
+        })
+        .unwrap_or(FixtureScope::Unique);
 
     let mut sub_fixtures = vec![];
     let mut sub_fixtures_args = vec![];
@@ -202,10 +225,10 @@ fn fixture_impl(
         }
     };
 
-    let inner_wrapper = if args.global {
-        quote! { ::rustest::SharedFixtureValue }
-    } else {
+    let inner_wrapper = if let FixtureScope::Unique = scope {
         quote! { ::rustest::UniqueFixtureValue }
+    } else {
+        quote! { ::rustest::SharedFixtureValue }
     };
     let sig_inputs = &sig.inputs;
     let builder_output = &sig.output;

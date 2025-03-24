@@ -86,7 +86,7 @@ fn test_fixture_inc_number_2(number: IncNumber) {
 static INC_NUMBER2: AtomicU32 = AtomicU32::new(0);
 
 // Global fixture are setup only once.
-#[fixture(global)]
+#[fixture(scope=global)]
 fn IncNumber2() -> u32 {
     INC_NUMBER2.fetch_add(1, core::sync::atomic::Ordering::Relaxed)
 }
@@ -106,7 +106,7 @@ fn test_fixture_inc_number2_2(number: IncNumber2) {
 }
 
 // Fixtures can use other fixtures as source.
-#[fixture(global)]
+#[fixture(scope=global)]
 fn IncNumber3(source: IncNumber) -> u32 {
     *source
 }
