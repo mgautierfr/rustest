@@ -1,6 +1,8 @@
 use core::{
     any::{Any, TypeId},
     clone::Clone,
+    fmt::Debug,
+    panic::{RefUnwindSafe, UnwindSafe},
 };
 use std::sync::Arc;
 
@@ -68,8 +70,51 @@ impl FixtureRegistry {
     }
 }
 
+pub type TeardownFn<T> = dyn FnOnce(&mut T) + Send + RefUnwindSafe + UnwindSafe + Sync;
+
+pub struct FixtureTeardown<T> {
+    value: T,
+    teardown: Option<Box<TeardownFn<T>>>,
+}
+
+impl<T: Debug> Debug for FixtureTeardown<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Teardown")
+            .field("value", &self.value)
+            .field(
+                "teardown",
+                if self.teardown.is_none() {
+                    &"None"
+                } else {
+                    &"Some(...)"
+                },
+            )
+            .finish()
+    }
+}
+
+impl<T> std::ops::Deref for FixtureTeardown<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.value
+    }
+}
+
+impl<T> std::ops::DerefMut for FixtureTeardown<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
+    }
+}
+
+impl<T> Drop for FixtureTeardown<T> {
+    fn drop(&mut self) {
+        let teardown = self.teardown.take();
+        teardown.map(|t| t(&mut self.value));
+    }
+}
+
 #[derive(Debug)]
-pub struct SharedFixtureValue<T>(Arc<T>);
+pub struct SharedFixtureValue<T>(Arc<FixtureTeardown<T>>);
 
 impl<T> Clone for SharedFixtureValue<T> {
     fn clone(&self) -> Self {
@@ -78,27 +123,25 @@ impl<T> Clone for SharedFixtureValue<T> {
 }
 
 impl<T: 'static> SharedFixtureValue<T> {
-    pub fn build<F, Builder>(
+    pub fn build<Fx, Builder>(
         ctx: &mut FixtureRegistry,
         f: Builder,
+        teardown: Option<Box<TeardownFn<T>>>,
     ) -> std::result::Result<Self, FixtureCreationError>
     where
-        F: Fixture<InnerType = Self> + 'static,
+        Fx: Fixture<InnerType = Self> + 'static,
         Builder: Fn(&mut FixtureRegistry) -> std::result::Result<T, FixtureCreationError>,
     {
-        if let Some(f) = ctx.get::<F>() {
+        if let Some(f) = ctx.get::<Fx>() {
             return Ok(f);
         }
-        let value = f(ctx)?.into();
+        let value = SharedFixtureValue(Arc::new(FixtureTeardown {
+            value: f(ctx)?,
+            teardown,
+        }));
 
-        ctx.add::<F>(&value);
+        ctx.add::<Fx>(&value);
         Ok(value)
-    }
-}
-
-impl<T> From<T> for SharedFixtureValue<T> {
-    fn from(v: T) -> Self {
-        Self(v.into())
     }
 }
 
@@ -110,44 +153,23 @@ impl<T> std::ops::Deref for SharedFixtureValue<T> {
 }
 
 #[derive(Debug)]
-pub struct UniqueFixtureValue<T>(T);
-
-impl<T> UniqueFixtureValue<T>
-where
-    T: Copy,
-{
-    pub fn into_inner(self) -> T {
-        self.0
-    }
-}
-
-impl<T> Clone for UniqueFixtureValue<T>
-where
-    T: Clone,
-{
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-impl<T> Copy for UniqueFixtureValue<T> where T: Copy {}
+pub struct UniqueFixtureValue<T>(FixtureTeardown<T>);
 
 impl<T: 'static> UniqueFixtureValue<T> {
     pub fn build<F, Builder>(
         ctx: &mut FixtureRegistry,
         f: Builder,
+        teardown: Option<Box<TeardownFn<T>>>,
     ) -> std::result::Result<Self, FixtureCreationError>
     where
         F: Fixture<InnerType = Self> + 'static,
         Builder: Fn(&mut FixtureRegistry) -> std::result::Result<T, FixtureCreationError>,
     {
-        let value = f(ctx)?.into();
+        let value = UniqueFixtureValue(FixtureTeardown {
+            value: f(ctx)?,
+            teardown,
+        });
         Ok(value)
-    }
-}
-
-impl<T> From<T> for UniqueFixtureValue<T> {
-    fn from(v: T) -> Self {
-        Self(v)
     }
 }
 

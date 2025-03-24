@@ -99,7 +99,11 @@ struct FixtureAttr {
     #[darling(default)]
     fallible: Option<bool>,
 
+    #[darling(default)]
     name: Option<Ident>,
+
+    #[darling(default)]
+    teardown: Option<syn::Expr>,
 }
 
 fn get_fixture_type(
@@ -198,22 +202,18 @@ fn fixture_impl(
         }
     };
 
-    let (extra_impl, inner_wrapper) = if args.global {
-        (quote! {}, quote! { ::rustest::SharedFixtureValue })
+    let inner_wrapper = if args.global {
+        quote! { ::rustest::SharedFixtureValue }
     } else {
-        (
-            quote! {
-                impl #fixture_name where for<'a> #fixture_type: Copy {
-                    pub fn into_inner(self) -> #fixture_type {
-                        self.0.into_inner()
-                    }
-                }
-            },
-            quote! { ::rustest::UniqueFixtureValue },
-        )
+        quote! { ::rustest::UniqueFixtureValue }
     };
     let sig_inputs = &sig.inputs;
     let builder_output = &sig.output;
+
+    let teardown = args
+        .teardown
+        .map(|expr| quote! { Some(Box::new(#expr)) })
+        .unwrap_or_else(|| quote! { None });
 
     Ok(quote! {
         #[derive(Debug)]
@@ -223,12 +223,6 @@ fn fixture_impl(
         {
             fn clone(&self) -> Self {
                 Self(self.0.clone())
-            }
-        }
-
-        impl From<#fixture_type> for #fixture_name {
-            fn from(v: #fixture_type) -> Self {
-                Self(v.into())
             }
         }
 
@@ -245,7 +239,7 @@ fn fixture_impl(
                     #convert_result
                 };
 
-                Ok(Self(Self::InnerType::build::<Self, _>(ctx, builder)?))
+                Ok(Self(Self::InnerType::build::<Self, _>(ctx, builder, #teardown)?))
             }
         }
 
@@ -261,8 +255,6 @@ fn fixture_impl(
                 &mut self.0
             }
         }
-
-        #extra_impl
     })
 }
 

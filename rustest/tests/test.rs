@@ -112,19 +112,22 @@ fn IncNumber3(source: IncNumber) -> u32 {
 }
 
 #[test]
-fn test_fixture_inc_number3_0(number: IncNumber3) {
-    assert_eq!(*number, 3)
+fn test_fixture_inc_number3_0(number3: IncNumber3) {
+    assert_eq!(*number3, 3)
 }
 #[test]
-fn test_fixture_inc_number3_1(number: IncNumber3) {
-    assert_eq!(*number, 3)
+fn test_fixture_inc_number3_1(number3: IncNumber3) {
+    assert_eq!(*number3, 3)
 }
 #[test]
-fn test_fixture_inc_number3_2(number: IncNumber3) {
-    assert_eq!(*number, 3)
+fn test_fixture_inc_number3_2(number3: IncNumber3) {
+    assert_eq!(*number3, 3)
 }
 
-#[fixture]
+// This fixture is a sub process stucks in a infinite loop.
+// If we don't kill it when we don't need it, it will be keeped ulive and zombyfied at end of tests.
+// Teardown must be a function taking a `&mut value` and droping it as it has to.
+#[fixture(teardown=|v| v.kill().unwrap())]
 fn RunningProcess() -> std::io::Result<Box<std::process::Child>> {
     Ok(Box::new(
         std::process::Command::new("bash")
@@ -135,60 +138,8 @@ fn RunningProcess() -> std::io::Result<Box<std::process::Child>> {
     ))
 }
 
-// Teardown can be implemented using the Drop trait.
-// Either on the fixture itself (as it is now)
-// or on the returned type of the setup method.
-impl Drop for RunningProcess {
-    fn drop(&mut self) {
-        self.0.kill().unwrap()
-    }
-}
-
 #[test]
 fn test_with_process(a_process: RunningProcess) -> Result {
-    println!("Process id: {}", a_process.id());
-
-    Ok(())
-}
-
-// Global fixtures store their values in an `Arc`, so if you want to impl Drop you have
-// to impl it on thi inner value. Here, we need a new type to be able to impl it "on" Child.
-
-#[derive(Debug)]
-struct DropChild(std::process::Child);
-
-impl From<std::process::Child> for DropChild {
-    fn from(v: std::process::Child) -> Self {
-        Self(v)
-    }
-}
-
-impl std::ops::Deref for DropChild {
-    type Target = std::process::Child;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-// We have to impl Drop on DropChild, not on GlobalRunningProcess.
-impl Drop for DropChild {
-    fn drop(&mut self) {
-        self.0.kill().unwrap()
-    }
-}
-
-#[fixture(global)]
-fn GlobalRunningProcess() -> std::io::Result<DropChild> {
-    std::process::Command::new("bash")
-        .stdout(Stdio::piped())
-        .arg("-c")
-        .arg("while true; do sleep 1; done")
-        .spawn()
-        .map(|c| c.into())
-}
-
-#[test]
-fn test_with_global_process(a_process: GlobalRunningProcess) -> Result {
     println!("Process id: {}", a_process.id());
 
     Ok(())
