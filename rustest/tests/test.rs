@@ -195,4 +195,19 @@ fn test_double_unique_gen(a_number: IncNumber, its_double: DoubleGeneric<IncNumb
 fn test_double_local_gen(a_number: IncNumberLocal, its_double: DoubleGeneric<IncNumberLocal>) {
     assert_eq!(*a_number * 2, *its_double);
 }
+
+// Fixture can be parametrized.
+#[fixture(scope=test, params=[1,5])]
+fn Parametrized(param: rustest::FixtureParam<u32>) -> u32 {
+    param.0
+}
+
+// This will create two tests:
+// - test_param[Parametrized:1]
+// - test_param[Parametrized:5]
+#[test]
+fn test_param(a_number: Parametrized) {
+    assert!([1, 5].contains(&a_number));
+}
+
 main! {}

@@ -1,8 +1,8 @@
 mod fixture;
 mod test;
 pub use fixture::{
-    Fixture, FixtureCreationError, FixtureMatrix, FixtureRegistry, FixtureScope, MatrixCaller,
-    SharedFixtureValue, UniqueFixtureValue, get_fixture,
+    Fixture, FixtureCreationError, FixtureMatrix, FixtureName, FixtureParam, FixtureRegistry,
+    FixtureScope, MatrixCaller, SharedFixtureValue, get_fixture,
 };
 pub use libtest_mimic;
 pub use libtest_mimic::Failed;

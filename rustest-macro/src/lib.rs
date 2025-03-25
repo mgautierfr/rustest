@@ -87,7 +87,17 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
             let matrix_caller: ::rustest::MatrixCaller<_> = fixtures_matrix.into();
             let runner = |#(#test_args),*| {#ident(#(#test_args),*).into_error()};
             let test_runners = matrix_caller.call(runner);
-            let tests = test_runners.into_iter().map(|runner| ::rustest::Test::new(#test_name_str, #is_xfail, runner)).collect::<Vec<_>>();
+            let test_name = if test_runners.len() > 1 {
+                |name| format!("{}[{}]", #test_name_str, name)
+            } else {
+                |name| #test_name_str.to_owned()
+            };
+
+            let tests = test_runners.into_iter()
+                .map(|(name, runner)| ::rustest::Test::new(
+                    test_name(name), #is_xfail, runner)
+                )
+                .collect::<Vec<_>>();
             Ok(tests)
         }
     })
@@ -206,7 +216,14 @@ fn fixture_impl(
             } else {
                 unreachable!()
             };
-            sub_fixtures.push(quote! {::rustest::get_fixture(ctx)?});
+            if pat.to_string() == "param" && args.params.is_some() {
+                let params = &args.params;
+                sub_fixtures.push(
+                    quote! { #params.into_iter().map(|i| ::rustest::FixtureParam(i)).collect::<Vec<_>>() },
+                );
+            } else {
+                sub_fixtures.push(quote! {::rustest::get_fixture(ctx)?});
+            }
             sub_fixtures_args.push(quote! {#pat});
         }
     });
@@ -250,7 +267,6 @@ fn fixture_impl(
     }
 
     Ok(quote! {
-        #[derive(Debug)]
         #vis struct #fixture_name #fixture_generics #where_clause {
             inner: #inner_wrapper<#fixture_type>,
             #(#phantom_markers),*
@@ -265,12 +281,23 @@ fn fixture_impl(
             }
         }
 
-        impl #impl_generics Clone for #fixture_name #ty_generics where for<'a> #inner_wrapper<#fixture_type>: Clone,
-          #where_preticate
-
+        impl #impl_generics Clone for #fixture_name #ty_generics
+        where
+            for<'a> #inner_wrapper<#fixture_type>: Clone,
+            #where_preticate
         {
             fn clone(&self) -> Self {
                 Self::new(self.inner.clone())
+            }
+        }
+
+        impl #impl_generics ::rustest::FixtureName for #fixture_name #ty_generics
+        where
+            for<'a> #inner_wrapper<#fixture_type>: ::rustest::FixtureName,
+            #where_preticate
+        {
+            fn name(&self) -> String {
+                format!("{}:{}", stringify!(#fixture_name), self.inner.name())
             }
         }
 
@@ -292,7 +319,7 @@ fn fixture_impl(
                     #(let fixtures_matrix = fixtures_matrix.feed(#sub_fixtures);)*
                     let matrix_caller: ::rustest::MatrixCaller<_> = fixtures_matrix.into();
 
-                    matrix_caller.call(user_provided_setup_as_result).into_iter().map(|p| p()).collect::<std::result::Result<Vec<_>, _>>()
+                    matrix_caller.call(user_provided_setup_as_result).into_iter().map(|(_, p)| p()).collect::<std::result::Result<Vec<_>, _>>()
                 };
                 let inners = Self::InnerType::build::<Self, _>(ctx, builders, #teardown)?;
                 Ok(inners.into_iter().map(|i| Self::new(i)).collect())
