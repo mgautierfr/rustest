@@ -1,8 +1,9 @@
+use core::fmt::Debug;
 use libtest_mimic::Failed;
 use std::error::Error;
 
 pub type Result = std::result::Result<(), TestError>;
-type InnerTestResult = std::result::Result<(), Failed>;
+pub type InnerTestResult = std::result::Result<(), Failed>;
 
 use super::{Fixture, FixtureCreationError, FixtureRegistry, FixtureScope};
 use std::any::Any;
@@ -39,6 +40,16 @@ pub struct Test {
     name: String,
     runner: Box<dyn FnOnce() -> InnerTestResult + Send>,
     xfail: bool,
+}
+
+impl Debug for Test {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Test")
+            .field("name", &self.name)
+            .field("xfail", &self.xfail)
+            .field("teardown", &"...")
+            .finish()
+    }
 }
 
 impl Test {
@@ -100,7 +111,7 @@ impl<'a> TestContext<'a> {
     pub fn new(global_reg: &'a mut FixtureRegistry, reg: &'a mut FixtureRegistry) -> Self {
         Self { global_reg, reg }
     }
-    pub fn add<F>(&mut self, value: &F::InnerType)
+    pub fn add<F>(&mut self, value: &Vec<F::InnerType>)
     where
         F: Fixture + 'static,
         F::InnerType: Clone + 'static,
@@ -108,12 +119,12 @@ impl<'a> TestContext<'a> {
         let reg = match F::scope() {
             FixtureScope::Test => &mut self.reg,
             FixtureScope::Global => &mut self.global_reg,
-            _ => unreachable!(),
+            FixtureScope::Unique => return,
         };
         reg.add::<F>(value)
     }
 
-    pub fn get<F>(&mut self) -> Option<F::InnerType>
+    pub fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
     where
         F: Fixture + 'static,
         F::InnerType: Clone + 'static,
@@ -121,12 +132,12 @@ impl<'a> TestContext<'a> {
         let reg = match F::scope() {
             FixtureScope::Test => &mut self.reg,
             FixtureScope::Global => &mut self.global_reg,
-            _ => unreachable!(),
+            FixtureScope::Unique => return None,
         };
         reg.get::<F>()
     }
 
-    pub fn get_fixture<Fix>(&mut self) -> std::result::Result<Fix, FixtureCreationError>
+    pub fn get_fixture<Fix>(&mut self) -> std::result::Result<Vec<Fix>, FixtureCreationError>
     where
         Fix: Fixture + Any,
     {

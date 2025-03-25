@@ -13,12 +13,6 @@ use syn::{
 
 static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
-fn build_fixture_create(pat: &syn::Ident) -> proc_macro2::TokenStream {
-    quote! {
-        let #pat = ::rustest::get_fixture(ctx)?;
-    }
-}
-
 fn is_xfail(attrs: &Vec<Attribute>) -> bool {
     for attr in attrs.iter() {
         if attr.path().is_ident("xfail") {
@@ -71,7 +65,9 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
             } else {
                 unreachable!()
             };
-            fixtures.push(build_fixture_create(pat));
+            fixtures.push(quote! {
+                ::rustest::get_fixture(ctx)?
+            });
             test_args.push(quote! {#pat});
         }
     });
@@ -81,14 +77,18 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
     (quote! {
         #sig #block
 
-        fn #ctor_ident(global_reg: &mut ::rustest::FixtureRegistry) -> ::std::result::Result<::rustest::Test, ::rustest::FixtureCreationError> {
+        fn #ctor_ident(global_reg: &mut ::rustest::FixtureRegistry) -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError> {
             use ::rustest::IntoError;
             let mut test_registry = ::rustest::FixtureRegistry::new();
             let mut ctx = ::rustest::TestContext::new(global_reg, &mut test_registry);
             let ctx = &mut ctx;
-            #(#fixtures)*
-            let runner = || {#ident(#(#test_args),*).into_error()};
-            Ok(::rustest::Test::new(#test_name_str, #is_xfail, runner))
+            let fixtures_matrix = ::rustest::FixtureMatrix::new();
+            #(let fixtures_matrix = fixtures_matrix.feed(#fixtures);)*
+            let matrix_caller: ::rustest::MatrixCaller<_> = fixtures_matrix.into();
+            let runner = |#(#test_args),*| {#ident(#(#test_args),*).into_error()};
+            let test_runners = matrix_caller.call(runner);
+            let tests = test_runners.into_iter().map(|runner| ::rustest::Test::new(#test_name_str, #is_xfail, runner)).collect::<Vec<_>>();
+            Ok(tests)
         }
     })
     .into()
@@ -107,6 +107,9 @@ struct FixtureAttr {
 
     #[darling(default)]
     teardown: Option<syn::Expr>,
+
+    #[darling(default)]
+    params: Option<syn::Expr>,
 }
 
 fn get_fixture_type(
@@ -203,32 +206,32 @@ fn fixture_impl(
             } else {
                 unreachable!()
             };
-            sub_fixtures.push(build_fixture_create(pat));
+            sub_fixtures.push(quote! {::rustest::get_fixture(ctx)?});
             sub_fixtures_args.push(quote! {#pat});
         }
     });
 
     let convert_result = if fallible {
         quote! {
-            result.map(|v| v.into()).map_err(|e| ::rustest::FixtureCreationError::new(stringify!(#fixture_name), e))
+            result.map_err(|e| ::rustest::FixtureCreationError::new(stringify!(#fixture_name), e))
         }
     } else {
         quote! {
-            Ok(result.into())
+            Ok(result)
         }
     };
 
     let inner_wrapper = if shared {
         quote! { ::rustest::SharedFixtureValue }
     } else {
-        quote! { ::rustest::UniqueFixtureValue }
+        quote! { ::rustest::SharedFixtureValue }
     };
     let sig_inputs = &sig.inputs;
     let builder_output = &sig.output;
 
     let teardown = args
         .teardown
-        .map(|expr| quote! { Some(Box::new(#expr)) })
+        .map(|expr| quote! { Some(std::sync::Arc::new(#expr)) })
         .unwrap_or_else(|| quote! { None });
 
     let mut phantom_markers = vec![];
@@ -247,6 +250,7 @@ fn fixture_impl(
     }
 
     Ok(quote! {
+        #[derive(Debug)]
         #vis struct #fixture_name #fixture_generics #where_clause {
             inner: #inner_wrapper<#fixture_type>,
             #(#phantom_markers),*
@@ -273,18 +277,25 @@ fn fixture_impl(
         impl #impl_generics ::rustest::Fixture for #fixture_name #ty_generics  #where_clause {
             type InnerType = #inner_wrapper<#fixture_type>;
             type Type = #fixture_type;
-            fn setup(ctx: &mut ::rustest::TestContext) -> ::std::result::Result<Self, ::rustest::FixtureCreationError> {
-                let builder = |ctx: &mut ::rustest::TestContext| {
+            fn setup(ctx: &mut ::rustest::TestContext) -> ::std::result::Result<Vec<Self>, ::rustest::FixtureCreationError> {
+                let builders = |ctx: &mut ::rustest::TestContext| {
                     let user_provided_setup = |#sig_inputs| #builder_output {
                         #block
                     };
 
-                    #(#sub_fixtures)*
-                    let result = user_provided_setup(#(#sub_fixtures_args),*);
-                    #convert_result
-                };
+                    let user_provided_setup_as_result = move |#sig_inputs| {
+                        let result = user_provided_setup(#(#sub_fixtures_args),*);
+                        #convert_result
+                    };
 
-                Ok(Self::new(Self::InnerType::build::<Self, _>(ctx, builder, #teardown)?))
+                    let fixtures_matrix = ::rustest::FixtureMatrix::new();
+                    #(let fixtures_matrix = fixtures_matrix.feed(#sub_fixtures);)*
+                    let matrix_caller: ::rustest::MatrixCaller<_> = fixtures_matrix.into();
+
+                    matrix_caller.call(user_provided_setup_as_result).into_iter().map(|p| p()).collect::<std::result::Result<Vec<_>, _>>()
+                };
+                let inners = Self::InnerType::build::<Self, _>(ctx, builders, #teardown)?;
+                Ok(inners.into_iter().map(|i| Self::new(i)).collect())
             }
 
             fn scope() -> ::rustest::FixtureScope { #scope }
@@ -318,7 +329,7 @@ pub fn main(_item: TokenStream) -> TokenStream {
             .collect();
 
     (quote! {
-        const TEST_CTORS: &[fn (&mut ::rustest::FixtureRegistry) -> ::std::result::Result<::rustest::Test, ::rustest::FixtureCreationError>] = &[
+        const TEST_CTORS: &[fn (&mut ::rustest::FixtureRegistry) -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError>] = &[
             #(#test_ctors),*
         ];
 
@@ -328,15 +339,13 @@ pub fn main(_item: TokenStream) -> TokenStream {
 
             let mut global_registry = ::rustest::FixtureRegistry::new();
 
-            let tests: ::std::result::Result<_, ::rustest::FixtureCreationError> = TEST_CTORS
+            let tests: ::std::result::Result<Vec<_>, ::rustest::FixtureCreationError> = TEST_CTORS
                 .iter()
-                .map(|test_ctor| {
-                    Ok(test_ctor(&mut global_registry)?.into())
-                })
+                .map(|test_ctor| Ok(test_ctor(&mut global_registry)?))
                 .collect();
 
             let tests = match tests {
-                Ok(test) => test,
+                Ok(tests) => tests.into_iter().flatten().map(|t| t.into()).collect(),
                 Err(e) => {
                     eprintln!("Failed to create fixture {}: {}", e.fixture_name, e.error);
                     return std::process::ExitCode::FAILURE;
