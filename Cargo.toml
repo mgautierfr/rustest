@@ -10,5 +10,5 @@ repository = "https://github.com/kymeria/rustest"
 homepage = "https://github.com/kymeria/rustest"
 license = "MIT OR Apache-2.0"
 description = "Better test your program."
-keywords = ["test", "fixture", "harness", "testing", "dev-dependencies", "test-fixtures"]
+keywords = ["test", "fixture", "harness", "dev-dependencies", "test-fixtures"]
 categories = ["development-tools", "development-tools::testing"]
