@@ -108,10 +108,10 @@ pub struct TestContext<'a> {
 }
 
 impl<'a> TestContext<'a> {
-    pub fn new(global_reg: &'a mut FixtureRegistry, reg: &'a mut FixtureRegistry) -> Self {
+    pub(crate) fn new(global_reg: &'a mut FixtureRegistry, reg: &'a mut FixtureRegistry) -> Self {
         Self { global_reg, reg }
     }
-    pub fn add<F>(&mut self, value: Vec<F::InnerType>)
+    pub(crate) fn add<F>(&mut self, value: Vec<F::InnerType>)
     where
         F: Fixture + 'static,
         F::InnerType: Clone + 'static,
@@ -124,7 +124,7 @@ impl<'a> TestContext<'a> {
         reg.add::<F>(value)
     }
 
-    pub fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
+    pub(crate) fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
     where
         F: Fixture + 'static,
         F::InnerType: Clone + 'static,

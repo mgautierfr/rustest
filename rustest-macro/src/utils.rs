@@ -27,7 +27,7 @@ pub(crate) fn gen_fixture_call(
                     quote! { #params.into_iter().map(|i| ::rustest::FixtureParam(i)).collect::<Vec<_>>() },
                 );
             } else {
-                fixtures_build.push(quote! {::rustest::get_fixture(ctx)?});
+                fixtures_build.push(quote! { ctx.get_fixture()? });
             }
             call_args.push(quote! {#pat});
         }

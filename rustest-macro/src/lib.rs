@@ -44,30 +44,12 @@ pub fn main(_args: TokenStream, _input: TokenStream) -> TokenStream {
             .collect();
 
     (quote! {
-        const TEST_CTORS: &[fn (&mut ::rustest::FixtureRegistry) -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError>] = &[
+        const TEST_CTORS: &[::rustest::TestCtorFn] = &[
             #(#test_ctors),*
         ];
 
         fn main() -> std::process::ExitCode {
-            use ::rustest::libtest_mimic::{Arguments, Trial, run};
-            let args = Arguments::from_args();
-
-            let mut global_registry = ::rustest::FixtureRegistry::new();
-
-            let tests: ::std::result::Result<Vec<_>, ::rustest::FixtureCreationError> = TEST_CTORS
-                .iter()
-                .map(|test_ctor| Ok(test_ctor(&mut global_registry)?))
-                .collect();
-
-            let tests = match tests {
-                Ok(tests) => tests.into_iter().flatten().map(|t| t.into()).collect(),
-                Err(e) => {
-                    eprintln!("Failed to create fixture {}: {}", e.fixture_name, e.error);
-                    return std::process::ExitCode::FAILURE;
-                }
-            };
-            let conclusion = run(&args, tests);
-            conclusion.exit_code()
+            ::rustest::run_tests(TEST_CTORS)
         }
     })
     .into()

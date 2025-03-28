@@ -66,12 +66,9 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
     Ok(quote! {
         #sig #block
 
-        fn #ctor_ident(global_reg: &mut ::rustest::FixtureRegistry)
+        fn #ctor_ident(ctx: &mut ::rustest::TestContext)
             -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError> {
             use ::rustest::IntoError;
-            let mut test_registry = ::rustest::FixtureRegistry::new();
-            let mut ctx = ::rustest::TestContext::new(global_reg, &mut test_registry);
-            let ctx = &mut ctx;
             let fixtures_matrix = ::rustest::FixtureMatrix::new();
             #(let fixtures_matrix = fixtures_matrix.feed(#fixtures_build);)*
             let matrix_caller: ::rustest::MatrixCaller<_> = fixtures_matrix.into();

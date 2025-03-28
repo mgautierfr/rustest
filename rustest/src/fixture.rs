@@ -44,28 +44,19 @@ pub enum FixtureScope {
     Global,
 }
 
-pub fn get_fixture<Fix>(
-    ctx: &mut TestContext,
-) -> std::result::Result<Vec<Fix>, FixtureCreationError>
-where
-    Fix: Fixture + Any,
-{
-    ctx.get_fixture()
-}
-
 #[derive(Default)]
-pub struct FixtureRegistry {
+pub(crate) struct FixtureRegistry {
     pub fixtures: std::collections::HashMap<TypeId, Box<dyn Any>>,
 }
 
 impl FixtureRegistry {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             fixtures: Default::default(),
         }
     }
 
-    pub fn add<F>(&mut self, value: Vec<F::InnerType>)
+    pub(crate) fn add<F>(&mut self, value: Vec<F::InnerType>)
     where
         F: Fixture + 'static,
         F::InnerType: Clone + 'static,
@@ -74,7 +65,7 @@ impl FixtureRegistry {
             .insert(std::any::TypeId::of::<F>(), Box::new(value));
     }
 
-    pub fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
+    pub(crate) fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
     where
         F: Fixture + 'static,
         F::InnerType: Clone + 'static,
@@ -86,10 +77,10 @@ impl FixtureRegistry {
     }
 }
 
-pub type TeardownFn<T> = dyn Fn(&mut T) + Send + RefUnwindSafe + UnwindSafe + Sync;
+type TeardownFn<T> = dyn Fn(&mut T) + Send + RefUnwindSafe + UnwindSafe + Sync;
 
 #[derive(Clone)]
-pub struct FixtureTeardown<T> {
+struct FixtureTeardown<T> {
     value: T,
     teardown: Option<Arc<TeardownFn<T>>>,
 }
