@@ -71,8 +71,8 @@ name = "other_test" # for a test located at "tests/other_test.rs"
 harness = false
 ```
 
-You also need to add a main function in each of your integration tests. To do so simply call the macro `rustest::main! {}`
-at end of the integration test (after `#[test]` definitions).
+You also need to add a main function in each of your integration tests. To do so add an empty main function and
+mark it with `#[rustest::main]` attribute.
 
 
 ## Usage Examples
@@ -82,8 +82,7 @@ The file `tests/test.rs` shows all rustest's features and acts as examples and d
 
 **Simple Test:**
 
-Simple tests are as simple as with standard test library. You just have to define the main function by invocquing the
-`main!` macro.
+Simple tests are as simple as with standard test library. Don't forget to define the main function.
 
 ```rust
 use rustest::{test, main};
@@ -93,7 +92,8 @@ fn simple_test() {
     assert_eq!(5*6, 30)
 }
 
-main! {}
+#[main]
+fn main() {}
 ```
 
 **Failing Tests**
@@ -114,7 +114,8 @@ fn failing_test_bis() {
     assert_eq!(5*6, 31)
 }
 
-main! {}
+#[main]
+fn main() {}
 ```
 
 **Fixture Example:**

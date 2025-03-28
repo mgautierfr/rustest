@@ -220,4 +220,5 @@ fn test_param2(param: rustest::FixtureParam<u32>) {
     assert!([1, 5].contains(&param));
 }
 
-main! {}
+#[main]
+fn main() {}

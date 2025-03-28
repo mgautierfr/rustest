@@ -35,8 +35,8 @@ pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
-#[proc_macro]
-pub fn main(_item: TokenStream) -> TokenStream {
+#[proc_macro_attribute]
+pub fn main(_args: TokenStream, _input: TokenStream) -> TokenStream {
     let test_ctors: Vec<_> =
         std::mem::take::<Vec<String>>(TEST_COLLECTORS.lock().unwrap().as_mut())
             .into_iter()
