@@ -212,7 +212,7 @@ fn get_fixture_type(
                             Ok((true, quote! { #ty }))
                         }
                         _ => Err(quote_spanned! {
-                            output_type.span() =>
+                            output_type.span()=>
                             compile_error!("Cannot detect fixture type.");
                         }),
                     }
@@ -224,7 +224,7 @@ fn get_fixture_type(
         }
     } else {
         Err(quote_spanned! {
-            signature.span() =>
+            signature.span()=>
             compile_error!("Cannot detect fixture type.");
         })
     }
