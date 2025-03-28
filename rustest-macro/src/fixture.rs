@@ -200,6 +200,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
     }
 
     Ok(quote! {
+        #[derive(Clone)]
         #vis struct #fixture_name #fixture_generics #where_clause {
             inner: #inner_type,
             #(#phantom_markers),*
@@ -211,16 +212,6 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                     inner,
                     #(#phantom_builders),*
                 }
-            }
-        }
-
-        impl #impl_generics Clone for #fixture_name #ty_generics
-        where
-            for<'a> #inner_type: Clone,
-            #where_predicate
-        {
-            fn clone(&self) -> Self {
-                Self::new(self.inner.clone())
             }
         }
 
@@ -263,16 +254,6 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             type Target = <Self as ::rustest::Fixture>::Type;
             fn deref(&self) -> &Self::Target {
                 &self.inner
-            }
-        }
-
-        impl #impl_generics ::std::ops::DerefMut for #fixture_name #ty_generics
-        where
-            for<'a> #inner_type: ::std::ops::DerefMut,
-            #where_predicate
-        {
-            fn deref_mut(&mut self) -> &mut Self::Target {
-                self.inner.deref_mut()
             }
         }
     })

@@ -114,12 +114,6 @@ impl<T> std::ops::Deref for FixtureTeardown<T> {
     }
 }
 
-impl<T> std::ops::DerefMut for FixtureTeardown<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.value
-    }
-}
-
 impl<T> Drop for FixtureTeardown<T> {
     fn drop(&mut self) {
         let teardown = self.teardown.take();
