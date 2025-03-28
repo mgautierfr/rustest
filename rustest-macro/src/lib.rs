@@ -1,8 +1,6 @@
 use core::{convert::From, todo, unreachable};
 use std::sync::Mutex;
 
-use darling::FromMeta;
-use darling::ast::NestedMeta;
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::{quote, quote_spanned};
@@ -11,20 +9,27 @@ use syn::{
     ReturnType, TypeParam, parse_macro_input, spanned::Spanned,
 };
 
+use syn::parse::{Parse, ParseStream};
+
 static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 fn is_xfail(attrs: &Vec<Attribute>) -> bool {
-    for attr in attrs.iter() {
-        if attr.path().is_ident("xfail") {
-            return true;
-        }
-    }
-    false
+    attrs.iter().any(|attr| attr.path().is_ident("xfail"))
 }
 
-#[derive(FromMeta)]
+impl Parse for TestAttr {
+    fn parse(args: ParseStream) -> syn::Result<Self> {
+        let mut xfail = false;
+        if args.peek(syn::Ident) {
+            let ident = args.parse::<syn::Ident>()?;
+            if ident == "xfail" {
+                xfail = true;
+            }
+        }
+        Ok(TestAttr { xfail })
+    }
+}
 struct TestAttr {
-    #[darling(default)]
     xfail: bool,
 }
 
@@ -34,18 +39,7 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
     let ItemFn {
         sig, block, attrs, ..
     } = parse_macro_input!(input as ItemFn);
-    let attr_args = match NestedMeta::parse_meta_list(args.into()) {
-        Ok(v) => v,
-        Err(e) => {
-            return TokenStream::from(darling::Error::from(e).write_errors());
-        }
-    };
-    let args = match TestAttr::from_list(&attr_args) {
-        Ok(v) => v,
-        Err(e) => {
-            return TokenStream::from(e.write_errors());
-        }
-    };
+    let TestAttr { xfail } = parse_macro_input!(args as TestAttr);
 
     let ident = &sig.ident;
     let test_name = ident.to_string();
@@ -53,7 +47,7 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
     let ctor_name = format!("__{}_add_test", test_name);
     let ctor_ident = Ident::new(&ctor_name, Span::call_site());
 
-    let is_xfail = args.xfail || is_xfail(&attrs);
+    let is_xfail = xfail || is_xfail(&attrs);
 
     let mut fixtures = vec![];
     let mut test_args = vec![];
@@ -104,22 +98,101 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
-#[derive(FromMeta)]
+#[derive(Debug, PartialEq)]
+enum FixtureScope {
+    Unique,
+    Test,
+    Global,
+}
+
+impl Parse for FixtureScope {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let ident: Ident = input.parse()?;
+        match ident.to_string().as_str() {
+            "unique" => Ok(FixtureScope::Unique),
+            "global" => Ok(FixtureScope::Global),
+            "test" => Ok(FixtureScope::Test),
+            _ => {
+                // Return an error if the identifier does not match any variant
+                Err(syn::Error::new_spanned(
+                    &ident,
+                    format!(
+                        "expected one of 'unique', 'global', or 'test'. Got {}.",
+                        ident
+                    ),
+                ))
+            }
+        }
+    }
+}
+
 struct FixtureAttr {
-    #[darling(default)]
-    scope: Option<Ident>,
-
-    #[darling(default)]
+    scope: Option<FixtureScope>,
     fallible: Option<bool>,
-
-    #[darling(default)]
     name: Option<Ident>,
-
-    #[darling(default)]
     teardown: Option<syn::Expr>,
-
-    #[darling(default)]
     params: Option<syn::Expr>,
+}
+
+impl Parse for FixtureAttr {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut scope = None;
+        let mut fallible = None;
+        let mut name = None;
+        let mut teardown = None;
+        let mut params = None;
+
+        while !input.is_empty() {
+            let lookahead = input.lookahead1();
+            if lookahead.peek(syn::Ident) {
+                let ident: Ident = input.parse()?;
+                match ident.to_string().as_str() {
+                    "scope" => {
+                        let _: syn::Token![=] = input.parse()?;
+                        scope = Some(input.parse()?);
+                    }
+                    "fallible" => {
+                        if input.peek(syn::Token![=]) {
+                            let _: syn::Token![=] = input.parse()?;
+                            let v: syn::LitBool = input.parse()?;
+                            fallible = Some(v.value);
+                        } else {
+                            fallible = Some(true);
+                        }
+                    }
+                    "name" => {
+                        let _: syn::Token![=] = input.parse()?;
+                        name = Some(input.parse()?);
+                    }
+                    "teardown" => {
+                        let _: syn::Token![=] = input.parse()?;
+                        teardown = Some(input.parse()?);
+                    }
+                    "params" => {
+                        let _: syn::Token![=] = input.parse()?;
+                        params = Some(input.parse()?);
+                    }
+                    _ => {
+                        return Err(lookahead.error());
+                    }
+                }
+            } else {
+                break;
+            }
+
+            if input.peek(syn::Token![,]) {
+                let _: syn::Token![,] = input.parse()?;
+            }
+        }
+
+        Ok(FixtureAttr {
+            scope,
+            fallible,
+            name,
+            teardown,
+            params,
+        })
+    }
 }
 
 fn get_fixture_type(
@@ -162,19 +235,7 @@ fn get_fixture_type(
 #[proc_macro_attribute]
 pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemFn);
-    let attr_args = match NestedMeta::parse_meta_list(args.into()) {
-        Ok(v) => v,
-        Err(e) => {
-            return TokenStream::from(darling::Error::from(e).write_errors());
-        }
-    };
-
-    let args = match FixtureAttr::from_list(&attr_args) {
-        Ok(v) => v,
-        Err(e) => {
-            return TokenStream::from(e.write_errors());
-        }
-    };
+    let args = parse_macro_input!(args as FixtureAttr);
     match fixture_impl(args, input) {
         Ok(output) => output,
         Err(output) => output,
@@ -198,11 +259,10 @@ fn fixture_impl(
     let fallible = args.fallible.unwrap_or(fallible);
     let (shared, scope) = args
         .scope
-        .map(|s| match s.to_string().as_str() {
-            "unique" => (false, quote! {::rustest::FixtureScope::Unique}),
-            "test" => (true, quote! {::rustest::FixtureScope::Test}),
-            "global" => (true, quote! {::rustest::FixtureScope::Global}),
-            _ => todo!(),
+        .map(|s| match s {
+            FixtureScope::Unique => (false, quote! {::rustest::FixtureScope::Unique}),
+            FixtureScope::Test => (true, quote! {::rustest::FixtureScope::Test}),
+            FixtureScope::Global => (true, quote! {::rustest::FixtureScope::Global}),
         })
         .unwrap_or((false, quote! { ::rustest::FixtureScope::Unique}));
 
