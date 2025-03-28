@@ -254,34 +254,6 @@ macro_rules! impl_fixt_name {
     };
 }
 
-impl_fixt_name!((F0), (f0));
-impl_fixt_name!((F0, F1), (f0, f1));
-impl_fixt_name!((F0, F1, F2), (f0, f1, f2));
-impl_fixt_name!((F0, F1, F2, F3), (f0, f1, f2, f3));
-impl_fixt_name!((F0, F1, F2, F3, F4), (f0, f1, f2, f3, f4));
-impl_fixt_name!((F0, F1, F2, F3, F4, F5), (f0, f1, f2, f3, f4, f5));
-impl_fixt_name!((F0, F1, F2, F3, F4, F5, F6), (f0, f1, f2, f3, f4, f5, f6));
-impl_fixt_name!(
-    (F0, F1, F2, F3, F4, F5, F6, F7),
-    (f0, f1, f2, f3, f4, f5, f6, f7)
-);
-impl_fixt_name!(
-    (F0, F1, F2, F3, F4, F5, F6, F7, F8),
-    (f0, f1, f2, f3, f4, f5, f6, f7, f8)
-);
-impl_fixt_name!(
-    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9),
-    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9)
-);
-impl_fixt_name!(
-    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10),
-    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10)
-);
-impl_fixt_name!(
-    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11),
-    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11)
-);
-
 pub struct MatrixCaller<T> {
     fixtures: Vec<T>,
 }
@@ -326,39 +298,10 @@ macro_rules! impl_call {
         }
     };
 
-
     (@expand, $tup:ident, $($fixs:ident),+) => {
         let ($($fixs),+ ,) = $tup;
     };
 }
-
-impl_call!((F0), (f0));
-impl_call!((F0, F1), (f0, f1));
-impl_call!((F0, F1, F2), (f0, f1, f2));
-impl_call!((F0, F1, F2, F3), (f0, f1, f2, f3));
-impl_call!((F0, F1, F2, F3, F4), (f0, f1, f2, f3, f4));
-impl_call!((F0, F1, F2, F3, F4, F5), (f0, f1, f2, f3, f4, f5));
-impl_call!((F0, F1, F2, F3, F4, F5, F6), (f0, f1, f2, f3, f4, f5, f6));
-impl_call!(
-    (F0, F1, F2, F3, F4, F5, F6, F7),
-    (f0, f1, f2, f3, f4, f5, f6, f7)
-);
-impl_call!(
-    (F0, F1, F2, F3, F4, F5, F6, F7, F8),
-    (f0, f1, f2, f3, f4, f5, f6, f7, f8)
-);
-impl_call!(
-    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9),
-    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9)
-);
-impl_call!(
-    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10),
-    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10)
-);
-impl_call!(
-    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11),
-    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11)
-);
 
 impl From<FixtureMatrix<()>> for MatrixCaller<()> {
     fn from(m: FixtureMatrix<()>) -> Self {
@@ -389,36 +332,44 @@ macro_rules! impl_fixture_from {
     (@iter, $first:tt, $second:tt) => { (impl_fixture_from!(@iter, $first), $second) };
     (@iter, $first:tt, $second:tt, $($other:tt),* ) => { (impl_fixture_from!(@iter, $first, $second), $($other),*) };
 
-
     (@expand, $tup:ident, $($fixs:ident),+) => {
         let impl_fixture_from!(@iter, $($fixs),+) = $tup;
     };
 }
 
-impl_fixture_from!((F0), (f0));
-impl_fixture_from!((F0, F1), (f0, f1));
-impl_fixture_from!((F0, F1, F2), (f0, f1, f2));
-impl_fixture_from!((F0, F1, F2, F3), (f0, f1, f2, f3));
-impl_fixture_from!((F0, F1, F2, F3, F4), (f0, f1, f2, f3, f4));
-impl_fixture_from!((F0, F1, F2, F3, F4, F5), (f0, f1, f2, f3, f4, f5));
-impl_fixture_from!((F0, F1, F2, F3, F4, F5, F6), (f0, f1, f2, f3, f4, f5, f6));
-impl_fixture_from!(
+macro_rules! impl_multiple_fixture_stuff {
+    (($($types:tt),+), ($($names:ident),+)) => {
+        impl_fixture_from!(($($types),+), ($($names),+));
+        impl_call!(($($types),+), ($($names),+));
+        impl_fixt_name!(($($types),+), ($($names),+));
+    };
+
+}
+
+impl_multiple_fixture_stuff!((F0), (f0));
+impl_multiple_fixture_stuff!((F0, F1), (f0, f1));
+impl_multiple_fixture_stuff!((F0, F1, F2), (f0, f1, f2));
+impl_multiple_fixture_stuff!((F0, F1, F2, F3), (f0, f1, f2, f3));
+impl_multiple_fixture_stuff!((F0, F1, F2, F3, F4), (f0, f1, f2, f3, f4));
+impl_multiple_fixture_stuff!((F0, F1, F2, F3, F4, F5), (f0, f1, f2, f3, f4, f5));
+impl_multiple_fixture_stuff!((F0, F1, F2, F3, F4, F5, F6), (f0, f1, f2, f3, f4, f5, f6));
+impl_multiple_fixture_stuff!(
     (F0, F1, F2, F3, F4, F5, F6, F7),
     (f0, f1, f2, f3, f4, f5, f6, f7)
 );
-impl_fixture_from!(
+impl_multiple_fixture_stuff!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8)
 );
-impl_fixture_from!(
+impl_multiple_fixture_stuff!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9)
 );
-impl_fixture_from!(
+impl_multiple_fixture_stuff!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10)
 );
-impl_fixture_from!(
+impl_multiple_fixture_stuff!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11)
 );
