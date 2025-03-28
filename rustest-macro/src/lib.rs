@@ -444,3 +444,84 @@ pub fn main(_item: TokenStream) -> TokenStream {
     })
     .into()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{FixtureAttr, FixtureScope};
+    use quote::quote;
+    use syn::parse2;
+
+    #[test]
+    fn test_parse_fixture_attr_all_fields() {
+        let input = quote! {
+            scope = global,
+            fallible = true,
+            name = my_name,
+            teardown = my_teardown_expr,
+            params = my_params_expr
+        };
+
+        let fixture_attr = parse2::<FixtureAttr>(input).unwrap();
+
+        assert_eq!(fixture_attr.scope, Some(FixtureScope::Global));
+        assert_eq!(fixture_attr.fallible.unwrap(), true);
+        assert_eq!(fixture_attr.name.unwrap().to_string(), "my_name");
+        assert!(fixture_attr.teardown.is_some());
+        assert!(fixture_attr.params.is_some());
+    }
+
+    #[test]
+    fn test_parse_fixture_attr_some_fields() {
+        let input = quote! {
+            scope = unique,
+            fallible = false
+        };
+
+        let fixture_attr = parse2::<FixtureAttr>(input).unwrap();
+
+        assert_eq!(fixture_attr.scope, Some(FixtureScope::Unique));
+        assert_eq!(fixture_attr.fallible.unwrap(), false);
+        assert!(fixture_attr.name.is_none());
+        assert!(fixture_attr.teardown.is_none());
+        assert!(fixture_attr.params.is_none());
+    }
+
+    #[test]
+    fn test_parse_fixture_attr_no_fields() {
+        let input = quote! {};
+
+        let fixture_attr = parse2::<FixtureAttr>(input).unwrap();
+
+        assert!(fixture_attr.scope.is_none());
+        assert!(fixture_attr.fallible.is_none());
+        assert!(fixture_attr.name.is_none());
+        assert!(fixture_attr.teardown.is_none());
+        assert!(fixture_attr.params.is_none());
+    }
+
+    #[test]
+    fn test_parse_fixture_attr_invalid_field() {
+        let input = quote! {
+            invalid_field = some_value
+        };
+
+        let result = parse2::<FixtureAttr>(input);
+        assert!(result.is_err());
+    }
+    #[test]
+    fn test_parse_fixture_attr_invalid_scope() {
+        let input = quote! {
+            scope = invalid_scope
+        };
+        let result = parse2::<FixtureAttr>(input);
+        assert!(result.is_err());
+        // Get the error
+        let error = result.err().unwrap();
+
+        // Check that the error message is as expected
+        assert_eq!(
+            error.to_string(),
+            "expected one of 'unique', 'global', or 'test'. Got invalid_scope."
+        );
+    }
+}
