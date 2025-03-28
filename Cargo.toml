@@ -4,11 +4,11 @@ resolver = "2"
 
 [workspace.package]
 edition = "2024"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["Matthieu Gautier <mgautier@kymeria.fr>"]
 repository = "https://github.com/kymeria/rustest"
 homepage = "https://github.com/kymeria/rustest"
-license = "MIT"
-license-file = "LICENSE-MIT"
-
-
+license = "MIT OR Apache-2.0"
+description = "Better test your program."
+keywords = ["test", "fixture", "harness", "testing", "dev-dependencies", "test-fixtures"]
+categories = ["development-tools", "development-tools::testing"]
