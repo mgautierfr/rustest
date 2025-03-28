@@ -2,9 +2,11 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::parse::{Parse, ParseStream};
 use syn::{
-    AngleBracketedGenericArguments, FnArg, GenericParam, ItemFn, PathArguments, ReturnType,
-    TypeParam, spanned::Spanned,
+    AngleBracketedGenericArguments, GenericParam, ItemFn, PathArguments, ReturnType, TypeParam,
+    spanned::Spanned,
 };
+
+use crate::utils::gen_fixture_call;
 
 #[derive(Debug, PartialEq)]
 enum FixtureScope {
@@ -157,29 +159,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         .or(Some(FixtureScope::Unique))
         .map(TokenStream::from);
 
-    let mut sub_fixtures = vec![];
-    let mut sub_fixtures_args = vec![];
-
-    for fnarg in sig.inputs.iter() {
-        if let FnArg::Typed(typed_fnarg) = fnarg {
-            let pat = if let syn::Pat::Ident(patident) = typed_fnarg.pat.as_ref() {
-                &patident.ident
-            } else {
-                return Err(
-                    syn::Error::new_spanned(fnarg, "expected an identifier").to_compile_error()
-                );
-            };
-            if pat == "param" && args.params.is_some() {
-                let params = &args.params;
-                sub_fixtures.push(
-                    quote! { #params.into_iter().map(|i| ::rustest::FixtureParam(i)).collect::<Vec<_>>() },
-                );
-            } else {
-                sub_fixtures.push(quote! {::rustest::get_fixture(ctx)?});
-            }
-            sub_fixtures_args.push(quote! {#pat});
-        }
-    }
+    let (sub_fixtures_build, call_args) = gen_fixture_call(args.params.as_ref(), &sig)?;
 
     let convert_result = if fallible {
         quote! {
@@ -264,12 +244,12 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                     };
 
                     let user_provided_setup_as_result = move |#sig_inputs| {
-                        let result = user_provided_setup(#(#sub_fixtures_args),*);
+                        let result = user_provided_setup(#(#call_args),*);
                         #convert_result
                     };
 
                     let fixtures_matrix = ::rustest::FixtureMatrix::new();
-                    #(let fixtures_matrix = fixtures_matrix.feed(#sub_fixtures);)*
+                    #(let fixtures_matrix = fixtures_matrix.feed(#sub_fixtures_build);)*
                     let matrix_caller: ::rustest::MatrixCaller<_> = fixtures_matrix.into();
 
                     matrix_caller.call(user_provided_setup_as_result).into_iter().map(|(_, p)| p()).collect::<std::result::Result<Vec<_>, _>>()

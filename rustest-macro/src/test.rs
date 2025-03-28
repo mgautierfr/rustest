@@ -2,7 +2,9 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use std::sync::Mutex;
 use syn::parse::{Parse, ParseStream};
-use syn::{Attribute, FnArg, ItemFn, LitStr};
+use syn::{Attribute, ItemFn, LitStr};
+
+use crate::utils::gen_fixture_call;
 
 pub(crate) static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
@@ -49,6 +51,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
     let TestAttr { xfail, params } = args;
 
     let ident = &sig.ident;
+    let sig_inputs = &sig.inputs;
     let test_name = ident.to_string();
     let test_name_str = LitStr::new(&test_name, Span::call_site());
     let ctor_name = format!("__{}_add_test", test_name);
@@ -56,28 +59,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
     let is_xfail = xfail || is_xfail(&attrs);
 
-    let mut fixtures = vec![];
-    let mut test_args = vec![];
-
-    for fnarg in sig.inputs.iter() {
-        if let FnArg::Typed(typed_fnarg) = fnarg {
-            let pat = if let syn::Pat::Ident(patident) = typed_fnarg.pat.as_ref() {
-                &patident.ident
-            } else {
-                return Err(
-                    syn::Error::new_spanned(fnarg, "expected an identifier").to_compile_error()
-                );
-            };
-            if pat == "param" && params.is_some() {
-                fixtures.push(
-                    quote! { #params.into_iter().map(|i| ::rustest::FixtureParam(i)).collect::<Vec<_>>() },
-                );
-            } else {
-                fixtures.push(quote! {::rustest::get_fixture(ctx)?});
-            }
-            test_args.push(quote! {#pat});
-        }
-    }
+    let (fixtures_build, call_args) = gen_fixture_call(params.as_ref(), &sig)?;
 
     TEST_COLLECTORS.lock().unwrap().push(ctor_ident.to_string());
 
@@ -91,9 +73,9 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
             let mut ctx = ::rustest::TestContext::new(global_reg, &mut test_registry);
             let ctx = &mut ctx;
             let fixtures_matrix = ::rustest::FixtureMatrix::new();
-            #(let fixtures_matrix = fixtures_matrix.feed(#fixtures);)*
+            #(let fixtures_matrix = fixtures_matrix.feed(#fixtures_build);)*
             let matrix_caller: ::rustest::MatrixCaller<_> = fixtures_matrix.into();
-            let runner = |#(#test_args),*| {#ident(#(#test_args),*).into_error()};
+            let runner = |#sig_inputs| {#ident(#(#call_args),*).into_error()};
             let test_runners = matrix_caller.call(runner);
             let test_name = if test_runners.len() > 1 {
                 |name| format!("{}[{}]", #test_name_str, name)

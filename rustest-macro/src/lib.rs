@@ -1,5 +1,6 @@
 mod fixture;
 mod test;
+mod utils;
 
 use core::convert::From;
 use fixture::{FixtureAttr, fixture_impl};
