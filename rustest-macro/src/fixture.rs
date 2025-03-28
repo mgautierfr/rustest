@@ -1,13 +1,10 @@
-use core::{todo, unreachable};
-
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned};
+use syn::parse::{Parse, ParseStream};
 use syn::{
     AngleBracketedGenericArguments, FnArg, GenericParam, ItemFn, PathArguments, ReturnType,
     TypeParam, spanned::Spanned,
 };
-
-use syn::parse::{Parse, ParseStream};
 
 #[derive(Debug, PartialEq)]
 enum FixtureScope {
@@ -23,16 +20,13 @@ impl Parse for FixtureScope {
             "unique" => Ok(FixtureScope::Unique),
             "global" => Ok(FixtureScope::Global),
             "test" => Ok(FixtureScope::Test),
-            _ => {
-                // Return an error if the identifier does not match any variant
-                Err(syn::Error::new_spanned(
-                    &ident,
-                    format!(
-                        "expected one of 'unique', 'global', or 'test'. Got {}.",
-                        ident
-                    ),
-                ))
-            }
+            _ => Err(syn::Error::new_spanned(
+                &ident,
+                format!(
+                    "expected one of 'unique', 'global', or 'test'. Got {}.",
+                    ident
+                ),
+            )),
         }
     }
 }
@@ -155,7 +149,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
     let fixture_name = args.name.as_ref().unwrap_or(&sig.ident);
     let fixture_generics = &sig.generics;
     let (impl_generics, ty_generics, where_clause) = fixture_generics.split_for_impl();
-    let where_preticate = where_clause.as_ref().map(|wc| &wc.predicates);
+    let where_predicate = where_clause.as_ref().map(|wc| &wc.predicates);
     let (fallible, fixture_type) = get_fixture_type(&sig)?;
     let fallible = args.fallible.unwrap_or(fallible);
     let scope = args
@@ -166,12 +160,14 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
     let mut sub_fixtures = vec![];
     let mut sub_fixtures_args = vec![];
 
-    sig.inputs.iter().for_each(|fnarg| {
-        if let FnArg::Typed(fnarg) = fnarg {
-            let pat = if let syn::Pat::Ident(patident) = fnarg.pat.as_ref() {
+    for fnarg in sig.inputs.iter() {
+        if let FnArg::Typed(typed_fnarg) = fnarg {
+            let pat = if let syn::Pat::Ident(patident) = typed_fnarg.pat.as_ref() {
                 &patident.ident
             } else {
-                unreachable!()
+                return Err(
+                    syn::Error::new_spanned(fnarg, "expected an identifier").to_compile_error()
+                );
             };
             if pat == "param" && args.params.is_some() {
                 let params = &args.params;
@@ -183,7 +179,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             }
             sub_fixtures_args.push(quote! {#pat});
         }
-    });
+    }
 
     let convert_result = if fallible {
         quote! {
@@ -211,10 +207,14 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         let phantom_ident = Ident::new(&phantom_name, Span::call_site());
         let phantom_type = match param {
             GenericParam::Type(TypeParam { ident, .. }) => ident,
-            _ => todo!(),
+            _ => {
+                return Err(
+                    syn::Error::new_spanned(param, "expected a type parameter").to_compile_error()
+                );
+            }
         };
         phantom_markers.push(quote! {
-          #phantom_ident: std::marker::PhantomData<#phantom_type>
+            #phantom_ident: std::marker::PhantomData<#phantom_type>
         });
         phantom_builders.push(quote! { #phantom_ident: Default::default() });
     }
@@ -227,7 +227,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
 
         impl #impl_generics #fixture_name #ty_generics #where_clause {
             fn new(inner: #inner_type) -> Self {
-                Self{
+                Self {
                     inner,
                     #(#phantom_builders),*
                 }
@@ -237,7 +237,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         impl #impl_generics Clone for #fixture_name #ty_generics
         where
             for<'a> #inner_type: Clone,
-            #where_preticate
+            #where_predicate
         {
             fn clone(&self) -> Self {
                 Self::new(self.inner.clone())
@@ -247,14 +247,14 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         impl #impl_generics ::rustest::FixtureName for #fixture_name #ty_generics
         where
             for<'a> #inner_type: ::rustest::FixtureName,
-            #where_preticate
+            #where_predicate
         {
             fn name(&self) -> String {
                 format!("{}:{}", stringify!(#fixture_name), self.inner.name())
             }
         }
 
-        impl #impl_generics ::rustest::Fixture for #fixture_name #ty_generics  #where_clause {
+        impl #impl_generics ::rustest::Fixture for #fixture_name #ty_generics #where_clause {
             type InnerType = #inner_type;
             type Type = #fixture_type;
             fn setup(ctx: &mut ::rustest::TestContext) -> ::std::result::Result<Vec<Self>, ::rustest::FixtureCreationError> {
@@ -281,17 +281,17 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             fn scope() -> ::rustest::FixtureScope { #scope }
         }
 
-        impl #impl_generics ::std::ops::Deref for #fixture_name #ty_generics  #where_clause{
-            type Target = <Self as Fixture>::Type;
+        impl #impl_generics ::std::ops::Deref for #fixture_name #ty_generics #where_clause {
+            type Target = <Self as ::rustest::Fixture>::Type;
             fn deref(&self) -> &Self::Target {
                 &self.inner
             }
         }
 
         impl #impl_generics ::std::ops::DerefMut for #fixture_name #ty_generics
-          where
-          for<'a> #inner_type: ::std::ops::DerefMut,
-          #where_preticate
+        where
+            for<'a> #inner_type: ::std::ops::DerefMut,
+            #where_predicate
         {
             fn deref_mut(&mut self) -> &mut Self::Target {
                 self.inner.deref_mut()
@@ -363,6 +363,7 @@ mod tests {
         let result = parse2::<FixtureAttr>(input);
         assert!(result.is_err());
     }
+
     #[test]
     fn test_parse_fixture_attr_invalid_scope() {
         let input = quote! {
@@ -370,6 +371,7 @@ mod tests {
         };
         let result = parse2::<FixtureAttr>(input);
         assert!(result.is_err());
+
         // Get the error
         let error = result.err().unwrap();
 

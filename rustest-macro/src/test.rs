@@ -1,10 +1,8 @@
-use core::unreachable;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use std::sync::Mutex;
-use syn::{Attribute, FnArg, ItemFn, LitStr};
-
 use syn::parse::{Parse, ParseStream};
+use syn::{Attribute, FnArg, ItemFn, LitStr};
 
 pub(crate) static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
@@ -12,24 +10,28 @@ fn is_xfail(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("xfail"))
 }
 
+pub(crate) struct TestAttr {
+    xfail: bool,
+}
+
 impl Parse for TestAttr {
-    fn parse(args: ParseStream) -> syn::Result<Self> {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut xfail = false;
-        if args.peek(syn::Ident) {
-            let ident = args.parse::<syn::Ident>()?;
+        while !input.is_empty() {
+            let ident: Ident = input.parse()?;
             if ident == "xfail" {
                 xfail = true;
+            } else {
+                return Err(input.error("unexpected attribute"));
+            }
+            if input.peek(syn::Token![,]) {
+                let _: syn::Token![,] = input.parse()?;
             }
         }
         Ok(TestAttr { xfail })
     }
 }
 
-pub(crate) struct TestAttr {
-    xfail: bool,
-}
-
-/// This macro automatically adds tests function marked with #[test] to the test collection.
 pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, TokenStream> {
     let ItemFn {
         sig, block, attrs, ..
@@ -47,19 +49,21 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
     let mut fixtures = vec![];
     let mut test_args = vec![];
 
-    sig.inputs.iter().for_each(|fnarg| {
-        if let FnArg::Typed(fnarg) = fnarg {
-            let pat = if let syn::Pat::Ident(patident) = fnarg.pat.as_ref() {
+    for fnarg in sig.inputs.iter() {
+        if let FnArg::Typed(typed_fnarg) = fnarg {
+            let pat = if let syn::Pat::Ident(patident) = typed_fnarg.pat.as_ref() {
                 &patident.ident
             } else {
-                unreachable!()
+                return Err(
+                    syn::Error::new_spanned(fnarg, "expected an identifier").to_compile_error()
+                );
             };
             fixtures.push(quote! {
                 ::rustest::get_fixture(ctx)?
             });
             test_args.push(quote! {#pat});
         }
-    });
+    }
 
     TEST_COLLECTORS.lock().unwrap().push(ctor_ident.to_string());
 
@@ -91,4 +95,45 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
             Ok(tests)
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
+    use syn::{ItemFn, parse_quote, parse2};
+
+    #[test]
+    fn test_parse_test_attr() {
+        let input = quote! {
+            xfail
+        };
+
+        let attr = parse2::<TestAttr>(input).unwrap();
+        assert!(attr.xfail);
+    }
+
+    #[test]
+    fn test_parse_test_attr_invalid() {
+        let input = quote! {
+            invalid_attr
+        };
+
+        let result = parse2::<TestAttr>(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_test_impl() {
+        let input: ItemFn = parse_quote! {
+            fn my_test() {
+                assert_eq!(1 + 1, 2);
+            }
+        };
+
+        let args = TestAttr { xfail: false };
+
+        let result = test_impl(args, input);
+        assert!(result.is_ok());
+    }
 }
