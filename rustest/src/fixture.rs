@@ -440,3 +440,16 @@ impl<T: Display> FixtureName for FixtureParam<T> {
         format!("{}", self.0)
     }
 }
+
+impl<T> Deref for FixtureParam<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> FixtureParam<T> {
+    pub fn into(self) -> T {
+        self.0
+    }
+}

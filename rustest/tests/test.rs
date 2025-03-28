@@ -197,9 +197,10 @@ fn test_double_local_gen(a_number: IncNumberLocal, its_double: DoubleGeneric<Inc
 }
 
 // Fixture can be parametrized.
+// The Fixture argument must be named `param` and have the type of `rustest::FixtureParam<T>`.
 #[fixture(scope=test, params=[1,5])]
 fn Parametrized(param: rustest::FixtureParam<u32>) -> u32 {
-    param.0
+    param.into()
 }
 
 // This will create two tests:
@@ -208,6 +209,15 @@ fn Parametrized(param: rustest::FixtureParam<u32>) -> u32 {
 #[test]
 fn test_param(a_number: Parametrized) {
     assert!([1, 5].contains(&a_number));
+}
+
+// Tests can be parametrized too.
+// - test_param2[Parametrized:1]
+// - test_param2[Parametrized:5]
+// The test argument must be named `param` and have the type of `rustest::FixtureParam<T>`.
+#[test(params=[1,5])]
+fn test_param2(param: rustest::FixtureParam<u32>) {
+    assert!([1, 5].contains(&param));
 }
 
 main! {}

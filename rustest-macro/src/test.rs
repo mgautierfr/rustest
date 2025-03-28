@@ -12,23 +12,33 @@ fn is_xfail(attrs: &[Attribute]) -> bool {
 
 pub(crate) struct TestAttr {
     xfail: bool,
+    params: Option<syn::Expr>,
 }
 
 impl Parse for TestAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut xfail = false;
+        let mut params = None;
         while !input.is_empty() {
             let ident: Ident = input.parse()?;
-            if ident == "xfail" {
-                xfail = true;
-            } else {
-                return Err(input.error("unexpected attribute"));
+            match ident.to_string().as_str() {
+                "xfail" => {
+                    xfail = true;
+                }
+                "params" => {
+                    let _: syn::Token![=] = input.parse()?;
+                    params = Some(input.parse()?);
+                }
+
+                _ => {
+                    return Err(input.error("unexpected attribute"));
+                }
             }
             if input.peek(syn::Token![,]) {
                 let _: syn::Token![,] = input.parse()?;
             }
         }
-        Ok(TestAttr { xfail })
+        Ok(TestAttr { xfail, params })
     }
 }
 
@@ -36,7 +46,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
     let ItemFn {
         sig, block, attrs, ..
     } = input;
-    let TestAttr { xfail } = args;
+    let TestAttr { xfail, params } = args;
 
     let ident = &sig.ident;
     let test_name = ident.to_string();
@@ -58,9 +68,13 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                     syn::Error::new_spanned(fnarg, "expected an identifier").to_compile_error()
                 );
             };
-            fixtures.push(quote! {
-                ::rustest::get_fixture(ctx)?
-            });
+            if pat == "param" && params.is_some() {
+                fixtures.push(
+                    quote! { #params.into_iter().map(|i| ::rustest::FixtureParam(i)).collect::<Vec<_>>() },
+                );
+            } else {
+                fixtures.push(quote! {::rustest::get_fixture(ctx)?});
+            }
             test_args.push(quote! {#pat});
         }
     }
@@ -131,7 +145,10 @@ mod tests {
             }
         };
 
-        let args = TestAttr { xfail: false };
+        let args = TestAttr {
+            xfail: false,
+            params: None,
+        };
 
         let result = test_impl(args, input);
         assert!(result.is_ok());
