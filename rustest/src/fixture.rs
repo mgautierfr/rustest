@@ -229,52 +229,23 @@ pub trait FixtureName {
     fn name(&self) -> String;
 }
 
-macro_rules! impl_fixt_name {
+macro_rules! impl_multiple_fixture_stuff {
     (($($types:tt),+), ($($names:ident),+)) => {
-        impl< $($types),+ > FixtureName for ($($types),+,)
-            where
-                $($types : Send + UnwindSafe + FixtureName + 'static),+ , {
+
+        impl< $($types),+ > FixtureName for impl_multiple_fixture_stuff!(@iter, $($types),+)
+           where
+                $($types : Send + UnwindSafe + FixtureName + 'static),+ ,
+        {
             fn name(&self) -> String {
-                impl_fixt_name!(@expand, self, $($names),+);
-                impl_fixt_name!(@to_name, $($names),+);
+                impl_multiple_fixture_stuff!(@expand_inner, self, $($names),+);
+                impl_multiple_fixture_stuff!(@to_name, $($names),+);
                 let vec = vec![$($names),+];
                 vec.join("|")
             }
         }
-    };
-    (@expand, $tup:ident, $($fixs:ident),+) => {
-        let ($($fixs),+ ,) = $tup;
-    };
-    (@to_name, $name:tt) => {
-        let $name = $name.name();
-    };
-    (@to_name, $name:tt, $($names:tt),+) => {
-        let $name = $name.name();
-        impl_fixt_name!(@to_name, $($names),+)
-    };
-}
 
-pub struct MatrixCaller<T> {
-    fixtures: Vec<T>,
-}
-
-impl MatrixCaller<()> {
-    pub fn call<F, Output>(
-        self,
-        f: F,
-    ) -> Vec<(String, Box<dyn FnOnce() -> Output + Send + UnwindSafe>)>
-    where
-        F: Fn() -> Output + Send + Sync + UnwindSafe + RefUnwindSafe + 'static,
-    {
-        vec![("".into(), Box::new(f))]
-    }
-}
-
-macro_rules! impl_call {
-    (($($types:tt),+), ($($names:ident),+)) => {
-        impl< $($types),+ > MatrixCaller< ( $($types),+ ,) > where
-                $($types : Send + UnwindSafe + FixtureName + 'static),+ ,
-
+        impl<$($types),+> FixtureMatrix<impl_multiple_fixture_stuff!(@iter, $($types),+)> where
+            $($types : Send + UnwindSafe + FixtureName + 'static),+ ,
         {
             pub fn call<F, Output>(
                 self,
@@ -288,62 +259,34 @@ macro_rules! impl_call {
                     .into_iter()
                     .map(|fix| {
                         let name = fix.name();
-                        impl_call!(@expand, fix, $($names),+);
+                        impl_multiple_fixture_stuff!(@expand_inner, fix, $($names),+);
                         let caller = Arc::clone(&caller);
                         let runner = move || caller($($names),+);
                         (name, Box::new(runner) as Box<dyn FnOnce() -> Output + Send + UnwindSafe>)
                     })
                     .collect()
-            }
-        }
-    };
 
-    (@expand, $tup:ident, $($fixs:ident),+) => {
-        let ($($fixs),+ ,) = $tup;
-    };
-}
-
-impl From<FixtureMatrix<()>> for MatrixCaller<()> {
-    fn from(m: FixtureMatrix<()>) -> Self {
-        Self {
-            fixtures: m.fixtures,
-        }
-    }
-}
-
-macro_rules! impl_fixture_from {
-    (($($types:tt),+), ($($names:ident),+)) => {
-        impl<$($types),+> From<FixtureMatrix<impl_fixture_from!(@iter, $($types),+)>> for MatrixCaller<($($types),+,)> {
-            fn from(m: FixtureMatrix<impl_fixture_from!(@iter, $($types),+)>) -> Self {
-                let fixtures = m
-                    .fixtures
-                    .into_iter()
-                    .map(|v| {
-                        impl_fixture_from!(@expand, v, $($names),+);
-                        ($($names),+,)
-                    })
-                    .collect();
-                Self { fixtures }
             }
         }
     };
 
     (@iter, $first:tt) => { ((), $first) };
-    (@iter, $first:tt, $second:tt) => { (impl_fixture_from!(@iter, $first), $second) };
-    (@iter, $first:tt, $second:tt, $($other:tt),* ) => { (impl_fixture_from!(@iter, $first, $second), $($other),*) };
+    (@iter, $first:tt, $second:tt) => { (impl_multiple_fixture_stuff!(@iter, $first), $second) };
+    (@iter, $first:tt, $second:tt, $($other:tt),* ) => { (impl_multiple_fixture_stuff!(@iter, $first, $second), $($other),*) };
 
-    (@expand, $tup:ident, $($fixs:ident),+) => {
-        let impl_fixture_from!(@iter, $($fixs),+) = $tup;
+    (@expand_inner, $tup:ident, $($fixs:ident),+) => {
+        let impl_multiple_fixture_stuff!(@iter, $($fixs),+) = $tup;
     };
-}
-
-macro_rules! impl_multiple_fixture_stuff {
-    (($($types:tt),+), ($($names:ident),+)) => {
-        impl_fixture_from!(($($types),+), ($($names),+));
-        impl_call!(($($types),+), ($($names),+));
-        impl_fixt_name!(($($types),+), ($($names),+));
+    (@expand_flat, $tup:ident, $($fixs:ident),+) => {
+        let ($($fixs),+ ,) = $tup;
     };
-
+    (@to_name, $name:tt) => {
+        let $name = $name.name();
+    };
+    (@to_name, $name:tt, $($names:tt),+) => {
+        let $name = $name.name();
+        impl_multiple_fixture_stuff!(@to_name, $($names),+)
+    };
 }
 
 impl_multiple_fixture_stuff!((F0), (f0));

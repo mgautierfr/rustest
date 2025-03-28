@@ -250,9 +250,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
 
                     let fixtures_matrix = ::rustest::FixtureMatrix::new();
                     #(let fixtures_matrix = fixtures_matrix.feed(#sub_fixtures_build);)*
-                    let matrix_caller: ::rustest::MatrixCaller<_> = fixtures_matrix.into();
-
-                    matrix_caller.call(user_provided_setup_as_result).into_iter().map(|(_, p)| p()).collect::<std::result::Result<Vec<_>, _>>()
+                    fixtures_matrix.call(user_provided_setup_as_result).into_iter().map(|(_, p)| p()).collect::<std::result::Result<Vec<_>, _>>()
                 };
                 let inners = Self::InnerType::build::<Self, _>(ctx, builders, #teardown)?;
                 Ok(inners.into_iter().map(|i| Self::new(i)).collect())

@@ -71,9 +71,8 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
             use ::rustest::IntoError;
             let fixtures_matrix = ::rustest::FixtureMatrix::new();
             #(let fixtures_matrix = fixtures_matrix.feed(#fixtures_build);)*
-            let matrix_caller: ::rustest::MatrixCaller<_> = fixtures_matrix.into();
             let runner = |#sig_inputs| {#ident(#(#call_args),*).into_error()};
-            let test_runners = matrix_caller.call(runner);
+            let test_runners = fixtures_matrix.call(runner);
             let test_name = if test_runners.len() > 1 {
                 |name| format!("{}[{}]", #test_name_str, name)
             } else {

@@ -3,7 +3,7 @@ mod test;
 use fixture::FixtureRegistry;
 pub use fixture::{
     Fixture, FixtureCreationError, FixtureMatrix, FixtureName, FixtureParam, FixtureScope,
-    MatrixCaller, SharedFixtureValue,
+    SharedFixtureValue,
 };
 pub use libtest_mimic;
 pub use libtest_mimic::Failed;
