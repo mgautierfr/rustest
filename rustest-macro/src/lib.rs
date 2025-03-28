@@ -2,7 +2,7 @@ use core::{convert::From, todo, unreachable};
 use std::sync::Mutex;
 
 use proc_macro::TokenStream;
-use proc_macro2::{Ident, Span};
+use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::{
     AngleBracketedGenericArguments, Attribute, FnArg, GenericParam, ItemFn, LitStr, PathArguments,
@@ -13,7 +13,7 @@ use syn::parse::{Parse, ParseStream};
 
 static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
-fn is_xfail(attrs: &Vec<Attribute>) -> bool {
+fn is_xfail(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("xfail"))
 }
 
@@ -71,7 +71,8 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
     (quote! {
         #sig #block
 
-        fn #ctor_ident(global_reg: &mut ::rustest::FixtureRegistry) -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError> {
+        fn #ctor_ident(global_reg: &mut ::rustest::FixtureRegistry)
+            -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError> {
             use ::rustest::IntoError;
             let mut test_registry = ::rustest::FixtureRegistry::new();
             let mut ctx = ::rustest::TestContext::new(global_reg, &mut test_registry);
@@ -122,6 +123,16 @@ impl Parse for FixtureScope {
                     ),
                 ))
             }
+        }
+    }
+}
+
+impl From<FixtureScope> for TokenStream2 {
+    fn from(value: FixtureScope) -> Self {
+        match value {
+            FixtureScope::Unique => quote! {::rustest::FixtureScope::Unique},
+            FixtureScope::Test => quote! {::rustest::FixtureScope::Test},
+            FixtureScope::Global => quote! {::rustest::FixtureScope::Global},
         }
     }
 }
@@ -202,7 +213,7 @@ fn get_fixture_type(
         match output_type.as_ref() {
             syn::Type::Path(type_path) => {
                 let last = type_path.path.segments.last().unwrap();
-                if last.ident.to_string() == "Result" {
+                if last.ident == "Result" {
                     match &last.arguments {
                         PathArguments::AngleBracketed(AngleBracketedGenericArguments {
                             args,
@@ -257,14 +268,10 @@ fn fixture_impl(
     let where_preticate = where_clause.as_ref().map(|wc| &wc.predicates);
     let (fallible, fixture_type) = get_fixture_type(&sig)?;
     let fallible = args.fallible.unwrap_or(fallible);
-    let (shared, scope) = args
+    let scope = args
         .scope
-        .map(|s| match s {
-            FixtureScope::Unique => (false, quote! {::rustest::FixtureScope::Unique}),
-            FixtureScope::Test => (true, quote! {::rustest::FixtureScope::Test}),
-            FixtureScope::Global => (true, quote! {::rustest::FixtureScope::Global}),
-        })
-        .unwrap_or((false, quote! { ::rustest::FixtureScope::Unique}));
+        .or(Some(FixtureScope::Unique))
+        .map(TokenStream2::from);
 
     let mut sub_fixtures = vec![];
     let mut sub_fixtures_args = vec![];
@@ -276,7 +283,7 @@ fn fixture_impl(
             } else {
                 unreachable!()
             };
-            if pat.to_string() == "param" && args.params.is_some() {
+            if pat == "param" && args.params.is_some() {
                 let params = &args.params;
                 sub_fixtures.push(
                     quote! { #params.into_iter().map(|i| ::rustest::FixtureParam(i)).collect::<Vec<_>>() },
@@ -298,11 +305,7 @@ fn fixture_impl(
         }
     };
 
-    let inner_wrapper = if shared {
-        quote! { ::rustest::SharedFixtureValue }
-    } else {
-        quote! { ::rustest::SharedFixtureValue }
-    };
+    let inner_type = quote! { ::rustest::SharedFixtureValue<#fixture_type> };
     let sig_inputs = &sig.inputs;
     let builder_output = &sig.output;
 
@@ -328,12 +331,12 @@ fn fixture_impl(
 
     Ok(quote! {
         #vis struct #fixture_name #fixture_generics #where_clause {
-            inner: #inner_wrapper<#fixture_type>,
+            inner: #inner_type,
             #(#phantom_markers),*
         }
 
         impl #impl_generics #fixture_name #ty_generics #where_clause {
-            fn new(inner: #inner_wrapper<#fixture_type>) -> Self {
+            fn new(inner: #inner_type) -> Self {
                 Self{
                     inner,
                     #(#phantom_builders),*
@@ -343,7 +346,7 @@ fn fixture_impl(
 
         impl #impl_generics Clone for #fixture_name #ty_generics
         where
-            for<'a> #inner_wrapper<#fixture_type>: Clone,
+            for<'a> #inner_type: Clone,
             #where_preticate
         {
             fn clone(&self) -> Self {
@@ -353,7 +356,7 @@ fn fixture_impl(
 
         impl #impl_generics ::rustest::FixtureName for #fixture_name #ty_generics
         where
-            for<'a> #inner_wrapper<#fixture_type>: ::rustest::FixtureName,
+            for<'a> #inner_type: ::rustest::FixtureName,
             #where_preticate
         {
             fn name(&self) -> String {
@@ -362,7 +365,7 @@ fn fixture_impl(
         }
 
         impl #impl_generics ::rustest::Fixture for #fixture_name #ty_generics  #where_clause {
-            type InnerType = #inner_wrapper<#fixture_type>;
+            type InnerType = #inner_type;
             type Type = #fixture_type;
             fn setup(ctx: &mut ::rustest::TestContext) -> ::std::result::Result<Vec<Self>, ::rustest::FixtureCreationError> {
                 let builders = |ctx: &mut ::rustest::TestContext| {
@@ -397,7 +400,7 @@ fn fixture_impl(
 
         impl #impl_generics ::std::ops::DerefMut for #fixture_name #ty_generics
           where
-          for<'a> #inner_wrapper<#fixture_type> : ::std::ops::DerefMut,
+          for<'a> #inner_type: ::std::ops::DerefMut,
           #where_preticate
         {
             fn deref_mut(&mut self) -> &mut Self::Target {

@@ -53,6 +53,7 @@ where
     ctx.get_fixture()
 }
 
+#[derive(Default)]
 pub struct FixtureRegistry {
     pub fixtures: std::collections::HashMap<TypeId, Box<dyn Any>>,
 }
@@ -64,13 +65,13 @@ impl FixtureRegistry {
         }
     }
 
-    pub fn add<F>(&mut self, value: &Vec<F::InnerType>)
+    pub fn add<F>(&mut self, value: Vec<F::InnerType>)
     where
         F: Fixture + 'static,
         F::InnerType: Clone + 'static,
     {
         self.fixtures
-            .insert(std::any::TypeId::of::<F>(), Box::new(value.clone()));
+            .insert(std::any::TypeId::of::<F>(), Box::new(value));
     }
 
     pub fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
@@ -131,7 +132,9 @@ impl<T> std::ops::DerefMut for FixtureTeardown<T> {
 impl<T> Drop for FixtureTeardown<T> {
     fn drop(&mut self) {
         let teardown = self.teardown.take();
-        teardown.map(|t| t(&mut self.value));
+        if let Some(t) = teardown {
+            t(&mut self.value)
+        }
     }
 }
 
@@ -167,7 +170,7 @@ impl<T: 'static> SharedFixtureValue<T> {
             })
             .collect::<Vec<_>>();
 
-        ctx.add::<Fx>(&values);
+        ctx.add::<Fx>(values.clone());
         Ok(values)
     }
 }
@@ -185,6 +188,7 @@ impl<T: Debug> FixtureName for SharedFixtureValue<T> {
     }
 }
 
+#[derive(Default)]
 pub struct FixtureMatrix<KnownTypes> {
     fixtures: Vec<KnownTypes>,
 }

@@ -72,8 +72,8 @@ impl Test {
                     // We expect the cause payload to be a string or 'str
                     let payload = cause
                         .downcast_ref::<String>()
-                        .map(|s| s.clone())
-                        .or(cause.downcast_ref::<&str>().map(|s| s.to_string()))
+                        .cloned()
+                        .or_else(|| cause.downcast_ref::<&str>().map(|s| s.to_string()))
                         .unwrap_or(format!("{:?}", cause));
                     Err(payload.into())
                 }
@@ -111,7 +111,7 @@ impl<'a> TestContext<'a> {
     pub fn new(global_reg: &'a mut FixtureRegistry, reg: &'a mut FixtureRegistry) -> Self {
         Self { global_reg, reg }
     }
-    pub fn add<F>(&mut self, value: &Vec<F::InnerType>)
+    pub fn add<F>(&mut self, value: Vec<F::InnerType>)
     where
         F: Fixture + 'static,
         F::InnerType: Clone + 'static,
