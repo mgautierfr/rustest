@@ -61,8 +61,7 @@ impl FixtureRegistry {
         F: Fixture + 'static,
         F::InnerType: Clone + 'static,
     {
-        self.fixtures
-            .insert(std::any::TypeId::of::<F>(), Box::new(value));
+        self.fixtures.insert(TypeId::of::<F>(), Box::new(value));
     }
 
     pub(crate) fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
@@ -70,7 +69,7 @@ impl FixtureRegistry {
         F: Fixture + 'static,
         F::InnerType: Clone + 'static,
     {
-        self.fixtures.get(&std::any::TypeId::of::<F>()).map(|a| {
+        self.fixtures.get(&TypeId::of::<F>()).map(|a| {
             let fixture = a.downcast_ref::<Vec<F::InnerType>>().unwrap();
             fixture.clone()
         })
@@ -116,8 +115,7 @@ impl<T> std::ops::Deref for FixtureTeardown<T> {
 
 impl<T> Drop for FixtureTeardown<T> {
     fn drop(&mut self) {
-        let teardown = self.teardown.take();
-        if let Some(t) = teardown {
+        if let Some(t) = self.teardown.take() {
             t(&mut self.value)
         }
     }

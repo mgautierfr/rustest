@@ -287,7 +287,7 @@ mod tests {
         let fixture_attr = parse2::<FixtureAttr>(input).unwrap();
 
         assert_eq!(fixture_attr.scope, Some(FixtureScope::Global));
-        assert_eq!(fixture_attr.fallible.unwrap(), true);
+        assert!(fixture_attr.fallible.unwrap());
         assert_eq!(fixture_attr.name.unwrap().to_string(), "my_name");
         assert!(fixture_attr.teardown.is_some());
         assert!(fixture_attr.params.is_some());
@@ -303,7 +303,7 @@ mod tests {
         let fixture_attr = parse2::<FixtureAttr>(input).unwrap();
 
         assert_eq!(fixture_attr.scope, Some(FixtureScope::Unique));
-        assert_eq!(fixture_attr.fallible.unwrap(), false);
+        assert!(!fixture_attr.fallible.unwrap());
         assert!(fixture_attr.name.is_none());
         assert!(fixture_attr.teardown.is_none());
         assert!(fixture_attr.params.is_none());
