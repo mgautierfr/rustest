@@ -317,7 +317,7 @@ impl_multiple_fixture_stuff!(
 );
 
 #[derive(Clone)]
-pub struct FixtureParam<T>(pub T);
+pub struct FixtureParam<T>(T);
 
 impl<T: Display> FixtureName for FixtureParam<T> {
     fn name(&self) -> String {
@@ -329,6 +329,12 @@ impl<T> Deref for FixtureParam<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<T> From<T> for FixtureParam<T> {
+    fn from(v: T) -> Self {
+        Self(v)
     }
 }
 

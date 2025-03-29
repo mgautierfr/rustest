@@ -23,9 +23,8 @@ pub(crate) fn gen_fixture_call(
                 );
             };
             if pat == "param" && params.is_some() {
-                fixtures_build.push(
-                    quote! { #params.into_iter().map(|i| ::rustest::FixtureParam(i)).collect::<Vec<_>>() },
-                );
+                fixtures_build
+                    .push(quote! { #params.into_iter().map(|i| i.into()).collect::<Vec<_>>() });
             } else {
                 fixtures_build.push(quote! { ctx.get_fixture()? });
             }
