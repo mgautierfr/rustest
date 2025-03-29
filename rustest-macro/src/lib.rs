@@ -10,7 +10,6 @@ use quote::quote;
 use syn::{ItemFn, parse_macro_input};
 use test::{TEST_COLLECTORS, TestAttr, test_impl};
 
-/// This macro automatically adds tests function marked with #[test] to the test collection.
 #[proc_macro_attribute]
 pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemFn);
@@ -22,8 +21,6 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
-/// This macro automatically adds tests marked with #[test] to the test collection.
-/// Tests then can be run with libtest_mimic_collect::TestCollection::run().
 #[proc_macro_attribute]
 pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemFn);

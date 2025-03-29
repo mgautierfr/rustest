@@ -8,6 +8,7 @@ use core::{
 };
 use std::sync::Arc;
 
+/// Represents an error that occurs during the creation of a fixture.
 #[derive(Debug)]
 pub struct FixtureCreationError {
     pub fixture_name: String,
@@ -15,6 +16,16 @@ pub struct FixtureCreationError {
 }
 
 impl FixtureCreationError {
+    /// Creates a new `FixtureCreationError`.
+    ///
+    /// # Arguments
+    ///
+    /// * `fixture_name` - The name of the fixture that encountered an error.
+    /// * `error` - The error that occurred.
+    ///
+    /// # Returns
+    ///
+    /// A new instance of `FixtureCreationError`.
     pub fn new<T>(fixture_name: &str, error: T) -> Self
     where
         T: std::error::Error + 'static,
@@ -26,36 +37,79 @@ impl FixtureCreationError {
     }
 }
 
+/// A trait representing a fixture that can be set up and torn down.
+///
+/// This trait is automatically impl by fixtures defined with [macro@crate::fixture] attribute macro.
+/// You should not have to impl it.
 pub trait Fixture:
     FixtureName + Deref<Target = Self::Type> + Send + UnwindSafe + Clone + 'static
 {
+    #[doc(hidden)]
     type InnerType;
+
+    /// The user type of the fixture.
     type Type;
+
+    /// Sets up the fixture and returns a result containing a vector of fixtures.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The test context used for setting up the fixture.
+    ///
+    /// # Returns
+    ///
+    /// A result containing a vector of fixtures or a `FixtureCreationError`.
     fn setup(ctx: &mut TestContext) -> std::result::Result<Vec<Self>, FixtureCreationError>
     where
         Self: Sized;
 
+    /// Returns the scope of the fixture.
+    ///
+    /// # Returns
+    ///
+    /// The scope of the fixture.
     fn scope() -> FixtureScope;
 }
 
+/// Represents the scope of a fixture.
+///
+/// The scope determines the test's "lifetime" of the fixture.
 pub enum FixtureScope {
     Unique,
     Test,
     Global,
 }
 
+/// A registry for managing fixtures.
+///
+/// The `FixtureRegistry` is used to store and manage fixtures. It allows adding and retrieving
+/// fixtures by their type.
 #[derive(Default)]
 pub(crate) struct FixtureRegistry {
     pub fixtures: std::collections::HashMap<TypeId, Box<dyn Any>>,
 }
 
 impl FixtureRegistry {
+    /// Creates a new `FixtureRegistry`.
+    ///
+    /// # Returns
+    ///
+    /// A new instance of `FixtureRegistry`.
     pub(crate) fn new() -> Self {
         Self {
             fixtures: Default::default(),
         }
     }
 
+    /// Adds a fixture to the registry.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - A vector of the inner type of the fixture to be added.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `F` - The type of the fixture.
     pub(crate) fn add<F>(&mut self, value: Vec<F::InnerType>)
     where
         F: Fixture + 'static,
@@ -64,6 +118,15 @@ impl FixtureRegistry {
         self.fixtures.insert(TypeId::of::<F>(), Box::new(value));
     }
 
+    /// Retrieves a fixture from the registry.
+    ///
+    /// # Arguments
+    ///
+    /// * `F` - The type of the fixture to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// An option containing a vector of the inner type of the fixture, if found.
     pub(crate) fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
     where
         F: Fixture + 'static,
@@ -76,8 +139,15 @@ impl FixtureRegistry {
     }
 }
 
+/// A type alias for a teardown function.
+///
+/// The teardown function is called when the fixture is dropped to clean up resources.
 type TeardownFn<T> = dyn Fn(&mut T) + Send + RefUnwindSafe + UnwindSafe + Sync;
 
+/// A struct that manages the teardown of a fixture.
+///
+/// `FixtureTeardown` holds a value and an optional teardown function that is called when the
+/// fixture is dropped.
 #[derive(Clone)]
 struct FixtureTeardown<T> {
     value: T,
@@ -121,7 +191,11 @@ impl<T> Drop for FixtureTeardown<T> {
     }
 }
 
+/// A shared fixture value that manages the teardown of a fixture.
+///
+/// `SharedFixtureValue` wraps a `FixtureTeardown` in an `Arc` to allow shared ownership.
 #[repr(transparent)]
+#[doc(hidden)]
 pub struct SharedFixtureValue<T>(Arc<FixtureTeardown<T>>);
 
 impl<T> Clone for SharedFixtureValue<T> {
@@ -131,6 +205,17 @@ impl<T> Clone for SharedFixtureValue<T> {
 }
 
 impl<T: 'static> SharedFixtureValue<T> {
+    /// Builds a shared fixture value.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The test context used for building the fixture.
+    /// * `f` - A builder function that returns a result containing a vector of the inner type.
+    /// * `teardown` - An optional teardown function.
+    ///
+    /// # Returns
+    ///
+    /// A result containing a vector of `SharedFixtureValue` or a `FixtureCreationError`.
     pub fn build<Fx, Builder>(
         ctx: &mut TestContext,
         f: Builder,
@@ -171,6 +256,10 @@ impl<T: Debug> FixtureName for SharedFixtureValue<T> {
     }
 }
 
+/// A matrix of fixtures.
+///
+/// `FixtureMatrix` is used to manage a collection of fixtures.
+/// It acts as an increasing matrix of dimension N as we feed it with new fixtures vector.
 #[derive(Default)]
 pub struct FixtureMatrix<KnownTypes> {
     fixtures: Vec<KnownTypes>,
@@ -178,12 +267,14 @@ pub struct FixtureMatrix<KnownTypes> {
 }
 
 impl<T> FixtureMatrix<T> {
+    /// Does the FixtureMatrix as multiple combination ?
     pub fn is_multiple(&self) -> bool {
         self.multiple
     }
 }
 
 impl FixtureMatrix<()> {
+    /// Creates a new `FixtureMatrix` with 0 dimmension.
     pub fn new() -> Self {
         Self {
             fixtures: Vec::new(),
@@ -193,15 +284,25 @@ impl FixtureMatrix<()> {
 }
 
 impl FixtureMatrix<()> {
-    pub fn feed<T: Clone>(self, new_fixs: Vec<T>) -> FixtureMatrix<((), T)> {
+    /// Feeds new fixtures into the matrix.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_fixs` - A vector of new fixtures to feed into the matrix.
+    ///
+    /// # Returns
+    ///
+    /// A new `FixtureMatrix` of dimmension 1 containing the fed fixtures.
+    pub fn feed<T: Clone>(self, new_fixs: Vec<T>) -> FixtureMatrix<(T,)> {
         let multiple = self.multiple || new_fixs.len() > 1;
         let fixtures = new_fixs
             .iter()
-            .map(move |new| ((), new.clone()))
+            .map(move |new| (new.clone(),))
             .collect::<Vec<_>>();
         FixtureMatrix { fixtures, multiple }
     }
 
+    /// Call the function f... with no fixture as this FixtureMatrix is dimmension 0.
     pub fn call<F, Output>(self, f: F) -> impl Iterator<Item = Output>
     where
         F: Fn(String) -> Output,
@@ -210,7 +311,16 @@ impl FixtureMatrix<()> {
     }
 }
 
+/// A trait for naming fixtures.
+///
+/// `FixtureName` is used to provide a name for a fixture, which can be used for identification
+/// and debugging purposes.
 pub trait FixtureName {
+    /// Returns the name of the fixture.
+    ///
+    /// # Returns
+    ///
+    /// The name of the fixture as a `String`.
     fn name(&self) -> String;
 }
 
@@ -305,6 +415,9 @@ impl_multiple_fixture_stuff!(
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11)
 );
 
+/// A struct representing a fixture parameter.
+///
+/// `FixtureParam` is used to wrap a value that can be used as a parameter in a fixture.
 #[derive(Clone)]
 pub struct FixtureParam<T>(T);
 
@@ -328,6 +441,11 @@ impl<T> From<T> for FixtureParam<T> {
 }
 
 impl<T> FixtureParam<T> {
+    /// Converts the `FixtureParam` into the inner value.
+    ///
+    /// # Returns
+    ///
+    /// The inner value.
     pub fn into(self) -> T {
         self.0
     }

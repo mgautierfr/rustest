@@ -2,12 +2,22 @@ use core::fmt::Debug;
 use libtest_mimic::Failed;
 use std::error::Error;
 
+/// Result of a test.
 pub type Result = std::result::Result<(), Box<dyn Error>>;
+
+#[doc(hidden)]
+/// The result of test runned by libtest_mimic.
+///
+/// InnerTestResult is necessary as it is what expected by libtest_mimic.
+/// User test is returning a Result and is converted to InnerTestResult with IntoError
+/// trait.
 pub type InnerTestResult = std::result::Result<(), Failed>;
 
 use super::{Fixture, FixtureCreationError, FixtureRegistry, FixtureScope};
 use std::any::Any;
 
+#[doc(hidden)]
+/// Convert the output of a test into a [InnerTestResult]
 pub trait IntoError {
     fn into_error(self) -> InnerTestResult;
 }
@@ -24,6 +34,7 @@ impl IntoError for Result {
     }
 }
 
+/// An actual test run by rustest
 pub struct Test {
     name: String,
     runner: Box<dyn FnOnce() -> InnerTestResult + Send>,
@@ -41,6 +52,7 @@ impl Debug for Test {
 }
 
 impl Test {
+    /// Build a new test.
     pub fn new<F>(name: impl Into<String>, xfail: bool, runner: F) -> Self
     where
         F: FnOnce() -> InnerTestResult + Send + std::panic::UnwindSafe + 'static,
@@ -90,6 +102,7 @@ impl From<Test> for libtest_mimic::Trial {
     }
 }
 
+/// The context of a specific test.
 pub struct TestContext<'a> {
     global_reg: &'a mut FixtureRegistry,
     reg: &'a mut FixtureRegistry,
