@@ -2,23 +2,11 @@ use core::fmt::Debug;
 use libtest_mimic::Failed;
 use std::error::Error;
 
-pub type Result = std::result::Result<(), TestError>;
+pub type Result = std::result::Result<(), Box<dyn Error>>;
 pub type InnerTestResult = std::result::Result<(), Failed>;
 
 use super::{Fixture, FixtureCreationError, FixtureRegistry, FixtureScope};
 use std::any::Any;
-
-#[derive(Debug)]
-pub struct TestError(pub Box<dyn Error>);
-
-impl<T> From<T> for TestError
-where
-    T: std::error::Error + 'static,
-{
-    fn from(e: T) -> Self {
-        Self(Box::new(e))
-    }
-}
 
 pub trait IntoError {
     fn into_error(self) -> InnerTestResult;
@@ -30,9 +18,9 @@ impl IntoError for () {
     }
 }
 
-impl IntoError for std::result::Result<(), TestError> {
+impl IntoError for Result {
     fn into_error(self) -> InnerTestResult {
-        self.map(|_v| ()).map_err(|e| e.0.to_string().into())
+        self.map(|_v| ()).map_err(|e| e.to_string().into())
     }
 }
 
