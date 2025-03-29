@@ -74,8 +74,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
             // We have to call build a Test per combination of fixtures.
             // Lets build a fixture_matrix.
-            let fixtures_matrix = ::rustest::FixtureMatrix::new();
-            #(let fixtures_matrix = fixtures_matrix.feed(#fixtures_build);)*
+            let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#fixtures_build))*;
 
             // Lets build a set of test_runners. They are taking no input and call the captured
             // fixture combination as needed.

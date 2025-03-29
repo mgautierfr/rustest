@@ -242,8 +242,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
 
                     // We have to call this function for each combination of its fixtures.
                     // Lets build a fixture_matrix.
-                    let fixtures_matrix = ::rustest::FixtureMatrix::new();
-                    #(let fixtures_matrix = fixtures_matrix.feed(#sub_fixtures_build);)*
+                    let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_build))*;
 
 
                     fixtures_matrix
