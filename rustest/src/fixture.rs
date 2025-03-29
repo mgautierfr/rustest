@@ -176,28 +176,39 @@ impl<T: Debug> FixtureName for SharedFixtureValue<T> {
 #[derive(Default)]
 pub struct FixtureMatrix<KnownTypes> {
     fixtures: Vec<KnownTypes>,
+    multiple: bool,
+}
+
+impl<T> FixtureMatrix<T> {
+    pub fn is_multiple(&self) -> bool {
+        self.multiple
+    }
 }
 
 impl FixtureMatrix<()> {
     pub fn new() -> Self {
         Self {
             fixtures: Vec::new(),
+            multiple: false,
         }
     }
 }
 
-impl<KnownTypes> From<Vec<KnownTypes>> for FixtureMatrix<KnownTypes> {
-    fn from(fixtures: Vec<KnownTypes>) -> Self {
-        Self { fixtures }
-    }
-}
 impl FixtureMatrix<()> {
     pub fn feed<T: Clone>(self, new_fixs: Vec<T>) -> FixtureMatrix<((), T)> {
+        let multiple = self.multiple || new_fixs.len() > 1;
         let fixtures = new_fixs
             .iter()
             .map(move |new| ((), new.clone()))
             .collect::<Vec<_>>();
-        fixtures.into()
+        FixtureMatrix { fixtures, multiple }
+    }
+
+    pub fn call<F, Output>(self, f: F) -> impl Iterator<Item = Output>
+    where
+        F: Fn(String) -> Output,
+    {
+        vec![(f("".into()))].into_iter()
     }
 }
 
@@ -206,6 +217,7 @@ where
     KnownTypes: Clone,
 {
     pub fn feed<T: Clone>(self, new_fixs: Vec<T>) -> FixtureMatrix<(((), KnownTypes), T)> {
+        let multiple = self.multiple || new_fixs.len() > 1;
         let fixtures = self
             .fixtures
             .into_iter()
@@ -215,7 +227,7 @@ where
                     .map(move |new| (existing.clone(), new.clone()))
             })
             .collect::<Vec<_>>();
-        fixtures.into()
+        FixtureMatrix { fixtures, multiple }
     }
 }
 
@@ -244,22 +256,17 @@ macro_rules! impl_multiple_fixture_stuff {
             pub fn call<F, Output>(
                 self,
                 f: F,
-            ) -> Vec<(String, Box<dyn FnOnce() -> Output + Send + UnwindSafe>)>
+            ) -> impl Iterator<Item = Output>
                 where
-                F: Fn($($types),+) -> Output + Send + Sync + UnwindSafe + RefUnwindSafe + 'static,
+                F: Fn(String, $($types),+) -> Output + Send + Sync + UnwindSafe + RefUnwindSafe + 'static,
             {
-                let caller = Arc::new(f);
                 self.fixtures
                     .into_iter()
-                    .map(|fix| {
+                    .map(move |fix| {
                         let name = fix.name();
                         impl_multiple_fixture_stuff!(@expand_inner, fix, $($names),+);
-                        let caller = Arc::clone(&caller);
-                        let runner = move || caller($($names),+);
-                        (name, Box::new(runner) as Box<dyn FnOnce() -> Output + Send + UnwindSafe>)
+                        f(name, $($names),+)
                     })
-                    .collect()
-
             }
         }
     };

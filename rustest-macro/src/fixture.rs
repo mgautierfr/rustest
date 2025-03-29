@@ -229,19 +229,28 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             type InnerType = #inner_type;
             type Type = #fixture_type;
             fn setup(ctx: &mut ::rustest::TestContext) -> ::std::result::Result<Vec<Self>, ::rustest::FixtureCreationError> {
+                // From InnerType::build, builders must be a function which, when call with a TestContext, returns a Vec of #fixture_type.
                 let builders = |ctx: &mut ::rustest::TestContext| {
-                    let user_provided_setup = |#sig_inputs| #builder_output {
-                        #block
-                    };
 
-                    let user_provided_setup_as_result = move |#sig_inputs| {
+                    // This is a lambda which call the initial impl of the fixture and transform the (#fixture_type) into a
+                    // `Resutl<#fixture_type, >` if this is not already a `Result`.
+                    let user_provided_setup_as_result = |#sig_inputs| {
+                        let user_provided_setup = |#sig_inputs| #builder_output #block;
                         let result = user_provided_setup(#(#call_args),*);
                         #convert_result
                     };
 
+                    // We have to call this function for each combination of its fixtures.
+                    // Lets build a fixture_matrix.
                     let fixtures_matrix = ::rustest::FixtureMatrix::new();
                     #(let fixtures_matrix = fixtures_matrix.feed(#sub_fixtures_build);)*
-                    fixtures_matrix.call(user_provided_setup_as_result).into_iter().map(|(_, p)| p()).collect::<std::result::Result<Vec<_>, _>>()
+
+
+                    fixtures_matrix
+                        // call do not call the lambda but return a new callable which will call the input builder with
+                        // the right fixture combination.
+                        .call(move | _, #(#call_args),* | user_provided_setup_as_result(#(#call_args),*))
+                        .collect::<std::result::Result<Vec<_>, _>>()
                 };
                 let inners = Self::InnerType::build::<Self, _>(ctx, builders, #teardown)?;
                 Ok(inners.into_iter().map(|i| Self::new(i)).collect())

@@ -69,20 +69,28 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
         fn #ctor_ident(ctx: &mut ::rustest::TestContext)
             -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError> {
             use ::rustest::IntoError;
+            // This is run our test with a set of input and convert it into err as needed.
+            let runner = |#sig_inputs| {#ident(#(#call_args),*).into_error()};
+
+            // We have to call build a Test per combination of fixtures.
+            // Lets build a fixture_matrix.
             let fixtures_matrix = ::rustest::FixtureMatrix::new();
             #(let fixtures_matrix = fixtures_matrix.feed(#fixtures_build);)*
-            let runner = |#sig_inputs| {#ident(#(#call_args),*).into_error()};
-            let test_runners = fixtures_matrix.call(runner);
-            let test_name = if test_runners.len() > 1 {
+
+            // Lets build a set of test_runners. They are taking no input and call the captured
+            // fixture combination as needed.
+            let test_name = if fixtures_matrix.is_multiple() {
                 |name| format!("{}[{}]", #test_name_str, name)
             } else {
                 |name| #test_name_str.to_owned()
             };
 
-            let tests = test_runners.into_iter()
-                .map(|(name, runner)| ::rustest::Test::new(
-                    test_name(name), #is_xfail, runner)
+            // Lets loop on all those runners and build a actual Test for each of them.
+            let tests = fixtures_matrix.call(
+                move |name, #(#call_args),* | ::rustest::Test::new(
+                    test_name(name), #is_xfail, move || runner(#(#call_args),*)
                 )
+            )
                 .collect::<Vec<_>>();
             Ok(tests)
         }
