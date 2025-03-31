@@ -2,7 +2,6 @@ use super::TestContext;
 use core::{
     any::{Any, TypeId},
     clone::Clone,
-    fmt::{Debug, Display},
     ops::Deref,
     panic::{RefUnwindSafe, UnwindSafe},
 };
@@ -37,12 +36,67 @@ impl FixtureCreationError {
     }
 }
 
+/// A trait to display fixtures when we have multiple combination for a test.
+///
+/// `FixtureDisplay` is used to provide a name for a fixture, mainly to identificate
+/// test case.
+pub trait FixtureDisplay {
+    /// Returns the name of the fixture.
+    ///
+    /// # Returns
+    ///
+    /// The name of the fixture as a `String`.
+    fn display(&self) -> String;
+}
+
+macro_rules! impl_display {
+    ($($t:ty),+) => {
+        $(impl FixtureDisplay for $t {
+            fn display(&self) -> String {
+                format!("{}", self)
+            }
+        })+
+    };
+}
+
+impl_display!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, bool, char, f32, f64, str, usize);
+
+impl<T: FixtureDisplay> FixtureDisplay for Box<T> {
+    fn display(&self) -> String {
+        self.deref().display()
+    }
+}
+
+impl<T: FixtureDisplay> FixtureDisplay for Option<T> {
+    fn display(&self) -> String {
+        match self {
+            Some(v) => v.display(),
+            None => "None".to_owned(),
+        }
+    }
+}
+
+impl FixtureDisplay for String {
+    fn display(&self) -> String {
+        self.clone()
+    }
+}
+
+impl<T: FixtureDisplay> FixtureDisplay for Vec<T> {
+    fn display(&self) -> String {
+        self.iter()
+            .map(|v| v.display())
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+}
+
 /// A trait representing a fixture that can be set up and torn down.
 ///
 /// This trait is automatically impl by fixtures defined with [macro@crate::fixture] attribute macro.
 /// You should not have to impl it.
 pub trait Fixture:
-    FixtureName + Deref<Target = Self::Type> + Send + UnwindSafe + Clone + 'static
+    FixtureDisplay + Deref<Target = Self::Type> + Send + UnwindSafe + Clone + 'static
 {
     #[doc(hidden)]
     type InnerType;
@@ -154,25 +208,9 @@ struct FixtureTeardown<T> {
     teardown: Option<Arc<TeardownFn<T>>>,
 }
 
-impl<T: Debug> Debug for FixtureTeardown<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("Teardown")
-            .field("value", &self.value)
-            .field(
-                "teardown",
-                if self.teardown.is_none() {
-                    &"None"
-                } else {
-                    &"Some(...)"
-                },
-            )
-            .finish()
-    }
-}
-
-impl<T: Debug> FixtureName for FixtureTeardown<T> {
-    fn name(&self) -> String {
-        format!("{:?}", self.value)
+impl<T: FixtureDisplay> FixtureDisplay for FixtureTeardown<T> {
+    fn display(&self) -> String {
+        self.value.display()
     }
 }
 
@@ -250,9 +288,9 @@ impl<T> std::ops::Deref for SharedFixtureValue<T> {
     }
 }
 
-impl<T: Debug> FixtureName for SharedFixtureValue<T> {
-    fn name(&self) -> String {
-        self.0.name()
+impl<T: FixtureDisplay> FixtureDisplay for SharedFixtureValue<T> {
+    fn display(&self) -> String {
+        self.0.display()
     }
 }
 
@@ -311,36 +349,23 @@ impl FixtureMatrix<()> {
     }
 }
 
-/// A trait for naming fixtures.
-///
-/// `FixtureName` is used to provide a name for a fixture, which can be used for identification
-/// and debugging purposes.
-pub trait FixtureName {
-    /// Returns the name of the fixture.
-    ///
-    /// # Returns
-    ///
-    /// The name of the fixture as a `String`.
-    fn name(&self) -> String;
-}
-
 macro_rules! impl_multiple_fixture_stuff {
     (($($types:tt),+), ($($names:ident),+)) => {
 
-        impl< $($types),+ > FixtureName for ($($types),+,)
+        impl< $($types),+ > FixtureDisplay for ($($types),+,)
            where
-                $($types : Send + UnwindSafe + FixtureName + 'static),+ ,
+                $($types : Send + UnwindSafe + FixtureDisplay + 'static),+ ,
         {
-            fn name(&self) -> String {
+            fn display(&self) -> String {
                 let ($($names),+, ) = self;
-                $(let $names = $names.name();)+
+                $(let $names = $names.display();)+
                 let vec = vec![$($names),+];
                 vec.join("|")
             }
         }
 
         impl<$($types),+> FixtureMatrix<($($types),+,)> where
-            $($types : Clone + Send + UnwindSafe + FixtureName + 'static),+ ,
+            $($types : Clone + Send + UnwindSafe + FixtureDisplay + 'static),+ ,
         {
             pub fn call<F, Output>(
                 self,
@@ -352,7 +377,7 @@ macro_rules! impl_multiple_fixture_stuff {
                 self.fixtures
                     .into_iter()
                     .map(move |fix| {
-                        let name = fix.name();
+                        let name = fix.display();
                         let ($($names),+, ) = fix;
                         f(name, $($names),+)
                     })
@@ -421,9 +446,9 @@ impl_multiple_fixture_stuff!(
 #[derive(Clone)]
 pub struct FixtureParam<T>(T);
 
-impl<T: Display> FixtureName for FixtureParam<T> {
-    fn name(&self) -> String {
-        format!("{}", self.0)
+impl<T: FixtureDisplay> FixtureDisplay for FixtureParam<T> {
+    fn display(&self) -> String {
+        self.0.display()
     }
 }
 
@@ -482,8 +507,8 @@ mod tests {
             &self.0
         }
     }
-    impl<T: std::fmt::Display> FixtureName for DummyFixture<T> {
-        fn name(&self) -> String {
+    impl<T: std::fmt::Display> FixtureDisplay for DummyFixture<T> {
+        fn display(&self) -> String {
             format!("{}", self.0)
         }
     }

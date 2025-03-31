@@ -6,7 +6,7 @@ use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
 pub use fixture::{
-    Fixture, FixtureCreationError, FixtureMatrix, FixtureName, FixtureParam, FixtureScope,
+    Fixture, FixtureCreationError, FixtureDisplay, FixtureMatrix, FixtureParam, FixtureScope,
 };
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError};
@@ -244,6 +244,31 @@ pub use rustest_macro::fixture;
 /// fn main() {}
 /// ```
 ///
+///```
+/// use rustest::test;
+///
+/// #[test(params=[
+///     (0, 0),
+///     (1, 1),
+///     (2, 1),
+///     (3, 2),
+///     (4, 3),
+///     (5, 5),
+///     (6, 8),
+/// ])]
+/// fn fibonacci_test(param: rustest::FixtureParam<(u32,u32)>) {
+///     let (expected, input) = *param;
+///     assert_eq!(expected, fibonacci(input))
+/// }
+///
+/// fn fibonacci(input: u32) -> u32 {
+///     match input {
+///         0 => 0,
+///         1 => 1,
+///         n => fibonacci(n - 2) + fibonacci(n - 1)
+///     }
+/// }
+/// ```
 /// `rustest` will produce 3 independent tests and not just one that
 /// check every case. Every test can fail independently and `cargo test`
 /// will give follow output:

@@ -1,4 +1,3 @@
-use core::fmt::Debug;
 use libtest_mimic::Failed;
 use std::error::Error;
 
@@ -39,16 +38,6 @@ pub struct Test {
     name: String,
     runner: Box<dyn FnOnce() -> InnerTestResult + Send>,
     xfail: bool,
-}
-
-impl Debug for Test {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("Test")
-            .field("name", &self.name)
-            .field("xfail", &self.xfail)
-            .field("teardown", &"...")
-            .finish()
-    }
 }
 
 impl Test {

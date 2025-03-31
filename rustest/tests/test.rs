@@ -1,7 +1,7 @@
 use core::{assert_eq, sync::atomic::AtomicU32};
 use std::process::Stdio;
 
-use rustest::{Fixture, Result, fixture, main, test};
+use rustest::{Fixture, FixtureDisplay, Result, fixture, main, test};
 
 // Tests are simply marked with #[test], as any classic rust integration tests
 #[test]
@@ -124,23 +124,31 @@ fn test_fixture_inc_number3_2(number3: IncNumber3) {
     assert_eq!(*number3, 3)
 }
 
+struct ProcessChild(pub std::process::Child);
+
 // This fixture is a sub process stucks in a infinite loop.
 // If we don't kill it when we don't need it, it will be keeped ulive and zombyfied at end of tests.
 // Teardown must be a function taking a `&mut value` and droping it as it has to.
-#[fixture(teardown=|v| v.kill().unwrap())]
-fn RunningProcess() -> std::io::Result<Box<std::process::Child>> {
-    Ok(Box::new(
+#[fixture(teardown=|v| v.0.kill().unwrap())]
+fn RunningProcess() -> std::io::Result<Box<ProcessChild>> {
+    Ok(Box::new(ProcessChild(
         std::process::Command::new("bash")
             .stdout(Stdio::piped())
             .arg("-c")
             .arg("while true; do sleep 1; done")
             .spawn()?,
-    ))
+    )))
+}
+
+impl FixtureDisplay for ProcessChild {
+    fn display(&self) -> String {
+        format!("Child pid: {}", self.0.id())
+    }
 }
 
 #[test]
 fn test_with_process(a_process: RunningProcess) -> Result {
-    println!("Process id: {}", a_process.id());
+    println!("Process id: {}", a_process.0.id());
 
     Ok(())
 }
@@ -218,6 +226,28 @@ fn test_param(a_number: Parametrized) {
 #[test(params=[1,5])]
 fn test_param2(param: rustest::FixtureParam<u32>) {
     assert!([1, 5].contains(&param));
+}
+
+#[test(params=[
+     (0, 0),
+     (1, 1),
+     (2, 1),
+     (3, 2),
+     (4, 3),
+     (5, 5),
+     (6, 8),
+ ])]
+fn fibonacci_test(param: rustest::FixtureParam<(u32, u32)>) {
+    let (input, expected) = *param;
+    assert_eq!(expected, fibonacci(input))
+}
+
+fn fibonacci(input: u32) -> u32 {
+    match input {
+        0 => 0,
+        1 => 1,
+        n => fibonacci(n - 2) + fibonacci(n - 1),
+    }
 }
 
 #[main]

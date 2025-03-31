@@ -215,13 +215,13 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             }
         }
 
-        impl #impl_generics ::rustest::FixtureName for #fixture_name #ty_generics
+        impl #impl_generics ::rustest::FixtureDisplay for #fixture_name #ty_generics
         where
-            for<'a> #inner_type: ::rustest::FixtureName,
+            for<'a> #inner_type: ::rustest::FixtureDisplay,
             #where_predicate
         {
-            fn name(&self) -> String {
-                format!("{}:{}", stringify!(#fixture_name), self.inner.name())
+            fn display(&self) -> String {
+                format!("[{}:{}]", stringify!(#fixture_name), self.inner.display())
             }
         }
 
