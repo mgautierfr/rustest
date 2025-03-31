@@ -205,10 +205,10 @@ fn test_double_local_gen(a_number: IncNumberLocal, its_double: DoubleGeneric<Inc
 }
 
 // Fixture can be parametrized.
-// The Fixture argument must be named `param` and have the type of `rustest::FixtureParam<T>`.
-#[fixture(scope=test, params=[1,5])]
-fn Parametrized(param: rustest::FixtureParam<u32>) -> u32 {
-    param.into()
+// The Fixture argument must be named `param` and have the type of `Param`.
+#[fixture(scope=test, params:u32=[1,5])]
+fn Parametrized(param: Param) -> u32 {
+    *param
 }
 
 // This will create two tests:
@@ -222,13 +222,14 @@ fn test_param(a_number: Parametrized) {
 // Tests can be parametrized too.
 // - test_param2[Parametrized:1]
 // - test_param2[Parametrized:5]
-// The test argument must be named `param` and have the type of `rustest::FixtureParam<T>`.
-#[test(params=[1,5])]
-fn test_param2(param: rustest::FixtureParam<u32>) {
-    assert!([1, 5].contains(&param));
+// The test argument must be named `param` and have the type of `Param`.
+
+#[test(params:u32=[1,5])]
+fn test_param2(p: Param) {
+    assert!([1, 5].contains(&p));
 }
 
-#[test(params=[
+#[test(params:(u32, u32)=[
      (0, 0),
      (1, 1),
      (2, 1),
@@ -237,8 +238,7 @@ fn test_param2(param: rustest::FixtureParam<u32>) {
      (5, 5),
      (6, 8),
  ])]
-fn fibonacci_test(param: rustest::FixtureParam<(u32, u32)>) {
-    let (input, expected) = *param;
+fn fibonacci_test(Param((input, expected)): Param) {
     assert_eq!(expected, fibonacci(input))
 }
 

@@ -6,7 +6,7 @@ use syn::{
     spanned::Spanned,
 };
 
-use crate::utils::gen_fixture_call;
+use crate::utils::{gen_fixture_call, gen_param_fixture};
 
 #[derive(Debug, PartialEq)]
 enum FixtureScope {
@@ -48,7 +48,7 @@ pub(crate) struct FixtureAttr {
     fallible: Option<bool>,
     name: Option<Ident>,
     teardown: Option<syn::Expr>,
-    params: Option<syn::Expr>,
+    params: Option<(syn::Type, syn::Expr)>,
 }
 
 impl Parse for FixtureAttr {
@@ -84,8 +84,11 @@ impl Parse for FixtureAttr {
                     teardown = Some(input.parse()?);
                 }
                 "params" => {
+                    let _: syn::Token![:] = input.parse()?;
+                    let ty = input.parse()?;
                     let _: syn::Token![=] = input.parse()?;
-                    params = Some(input.parse()?);
+                    let expr = input.parse()?;
+                    params = Some((ty, expr));
                 }
                 _ => {
                     return Err(syn::Error::new_spanned(
@@ -159,7 +162,8 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         .or(Some(FixtureScope::Unique))
         .map(TokenStream::from);
 
-    let (sub_fixtures_build, call_args) = gen_fixture_call(args.params.as_ref(), &sig)?;
+    let (sub_fixtures_build, call_args) = gen_fixture_call(&sig)?;
+    let param_fixture_def = gen_param_fixture(&args.params);
 
     let convert_result = if fallible {
         quote! {
@@ -229,12 +233,13 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             type InnerType = #inner_type;
             type Type = #fixture_type;
             fn setup(ctx: &mut ::rustest::TestContext) -> ::std::result::Result<Vec<Self>, ::rustest::FixtureCreationError> {
+                #param_fixture_def
                 // From InnerType::build, builders must be a function which, when call with a TestContext, returns a Vec of #fixture_type.
                 let builders = |ctx: &mut ::rustest::TestContext| {
 
                     // This is a lambda which call the initial impl of the fixture and transform the (#fixture_type) into a
                     // `Resutl<#fixture_type, >` if this is not already a `Result`.
-                    let user_provided_setup_as_result = |#sig_inputs| {
+                    let user_provided_setup_as_result = |#(#call_args),*| {
                         let user_provided_setup = |#sig_inputs| #builder_output #block;
                         let result = user_provided_setup(#(#call_args),*);
                         #convert_result
@@ -280,7 +285,7 @@ mod tests {
             fallible = true,
             name = my_name,
             teardown = my_teardown_expr,
-            params = my_params_expr
+            params:my_type = my_params_expr
         };
 
         let fixture_attr = parse2::<FixtureAttr>(input).unwrap();

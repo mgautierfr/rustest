@@ -5,9 +5,7 @@ mod test;
 use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
-pub use fixture::{
-    Fixture, FixtureCreationError, FixtureDisplay, FixtureMatrix, FixtureParam, FixtureScope,
-};
+pub use fixture::{Fixture, FixtureCreationError, FixtureDisplay, FixtureMatrix, FixtureScope};
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError};
 pub use test::{Result, Test, TestContext};
@@ -162,6 +160,8 @@ pub use rustest_macro::fixture;
 /// fn the_test(injected: Injected) {
 ///     assert_eq!(42, *injected)
 /// }
+/// #[main]
+/// fn main() {}
 /// ```
 /// ```
 /// use rustest::{test,*};
@@ -172,6 +172,8 @@ pub use rustest_macro::fixture;
 /// fn the_test(injected: Injected) {
 ///     assert_eq!(42, *injected)
 /// }
+/// #[main]
+/// fn main() {}
 /// ```
 ///
 /// ```
@@ -183,6 +185,8 @@ pub use rustest_macro::fixture;
 /// fn the_test(injected: Injected) {
 ///     assert_eq!(42, *injected)
 /// }
+/// #[main]
+/// fn main() {}
 /// ```
 ///
 /// Your annotated function's arguments can be
@@ -235,8 +239,8 @@ pub use rustest_macro::fixture;
 /// ```
 /// use rustest::{test, *};
 ///
-/// #[test(params=[1,2,5])]
-/// fn test(param: FixtureParam<u32>) {
+/// #[test(params:u32=[1,2,5])]
+/// fn test(param: Param) {
 ///     assert!([1,2,5].contains(&param))
 /// }
 ///
@@ -247,7 +251,7 @@ pub use rustest_macro::fixture;
 ///```
 /// use rustest::test;
 ///
-/// #[test(params=[
+/// #[test(params:(u32, u32)=[
 ///     (0, 0),
 ///     (1, 1),
 ///     (2, 1),
@@ -256,8 +260,8 @@ pub use rustest_macro::fixture;
 ///     (5, 5),
 ///     (6, 8),
 /// ])]
-/// fn fibonacci_test(param: rustest::FixtureParam<(u32,u32)>) {
-///     let (expected, input) = *param;
+/// fn fibonacci_test(param: Param) {
+///     let (input, expected) = *param;
 ///     assert_eq!(expected, fibonacci(input))
 /// }
 ///
@@ -268,6 +272,8 @@ pub use rustest_macro::fixture;
 ///         n => fibonacci(n - 2) + fibonacci(n - 1)
 ///     }
 /// }
+/// #[rustest::main]
+/// fn main() {}
 /// ```
 /// `rustest` will produce 3 independent tests and not just one that
 /// check every case. Every test can fail independently and `cargo test`

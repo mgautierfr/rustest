@@ -59,7 +59,9 @@ macro_rules! impl_display {
     };
 }
 
-impl_display!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, bool, char, f32, f64, str, usize);
+impl_display!(
+    u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, bool, char, f32, f64, str, usize
+);
 
 impl<T: FixtureDisplay> FixtureDisplay for Box<T> {
     fn display(&self) -> String {
@@ -439,42 +441,6 @@ impl_multiple_fixture_stuff!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11)
 );
-
-/// A struct representing a fixture parameter.
-///
-/// `FixtureParam` is used to wrap a value that can be used as a parameter in a fixture.
-#[derive(Clone)]
-pub struct FixtureParam<T>(T);
-
-impl<T: FixtureDisplay> FixtureDisplay for FixtureParam<T> {
-    fn display(&self) -> String {
-        self.0.display()
-    }
-}
-
-impl<T> Deref for FixtureParam<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> From<T> for FixtureParam<T> {
-    fn from(v: T) -> Self {
-        Self(v)
-    }
-}
-
-impl<T> FixtureParam<T> {
-    /// Converts the `FixtureParam` into the inner value.
-    ///
-    /// # Returns
-    ///
-    /// The inner value.
-    pub fn into(self) -> T {
-        self.0
-    }
-}
 
 #[cfg(test)]
 mod tests {
