@@ -226,9 +226,9 @@ fn test_global_counter2(counter1: GlobalCounter, counter2: GlobalCounter) {
 **Parametrized Fixture:**
 
 ```rust
-#[fixture(params = [1, 5])]
-fn ParametrizedFixture(param: rustest::FixtureParam<u32>) -> u32 {
-    param.0
+#[fixture(params:u32=[1, 5])]
+fn ParametrizedFixture(p: Param) -> u32 {
+    *p
 }
 
 #[test]
@@ -253,6 +253,7 @@ fn test_number_string(text: ANumberAsString) {
 **Fixtures can be Generic**
 
 ```rust
+#[fixture]
 fn NumberAsString<Source>(number: Source) -> String
 where
     Source: rustest::Fixture<Type =u32>
