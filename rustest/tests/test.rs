@@ -204,6 +204,12 @@ fn test_double_local_gen(a_number: IncNumberLocal, its_double: DoubleGeneric<Inc
     assert_eq!(*a_number * 2, *its_double);
 }
 
+type MyDoubleFixture = DoubleGeneric<IncNumberLocal>;
+#[test]
+fn test_double_typedef(a_number: IncNumberLocal, its_double: MyDoubleFixture) {
+    assert_eq!(*a_number * 2, *its_double);
+}
+
 // Fixture can be parametrized.
 // The Fixture argument must be named `param` and have the type of `Param`.
 #[fixture(scope=test, params:u32=[1,5])]
@@ -217,6 +223,14 @@ fn Parametrized(param: Param) -> u32 {
 #[test]
 fn test_param(a_number: Parametrized) {
     assert!([1, 5].contains(&a_number));
+}
+
+// This will create two tests:
+// - test_param[DoubleGeneric:2]
+// - test_param[DoubleGeneric:10]
+#[test]
+fn test_param_double(a_number: DoubleGeneric<Parametrized>) {
+    assert!([2, 10].contains(&a_number));
 }
 
 // Tests can be parametrized too.

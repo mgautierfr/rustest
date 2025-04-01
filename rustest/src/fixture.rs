@@ -131,8 +131,20 @@ pub trait Fixture:
 ///
 /// The scope determines the test's "lifetime" of the fixture.
 pub enum FixtureScope {
+    /// Fixture is used only once.
+    ///
+    /// The fixture is (re)created everytime we request it.
     Unique,
+
+    /// Fixture is associated to a test.
+    ///
+    /// The fixture is (re)created for every tests but created only once per test.
+    /// This is usefull if the test (or its fixtures' dependencies) reuse the same fixture twice.
     Test,
+
+    /// Fixture is global for each test
+    ///
+    /// The fixture is created only once and teardown at end of the tests run.
     Global,
 }
 
