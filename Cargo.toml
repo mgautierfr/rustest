@@ -4,7 +4,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2024"
-version = "0.0.2"
+version = "0.1.0"
 authors = ["Matthieu Gautier <mgautier@kymeria.fr>"]
 repository = "https://github.com/mgautierfr/rustest"
 homepage = "https://github.com/mgautierfr/rustest"
