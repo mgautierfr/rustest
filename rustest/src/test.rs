@@ -36,7 +36,7 @@ impl IntoError for Result {
 /// An actual test run by rustest
 pub struct Test {
     name: String,
-    runner: Box<dyn FnOnce() -> InnerTestResult + Send>,
+    runner: Box<dyn FnOnce() -> InnerTestResult + Send + std::panic::UnwindSafe>,
     xfail: bool,
 }
 
@@ -53,20 +53,19 @@ impl Test {
         }
     }
     fn run(self) -> InnerTestResult {
-        let test_result =
-            match ::std::panic::catch_unwind(std::panic::AssertUnwindSafe(self.runner)) {
-                Ok(Ok(())) => Ok(()),
-                Ok(Err(e)) => Err(e),
-                Err(cause) => {
-                    // We expect the cause payload to be a string or 'str
-                    let payload = cause
-                        .downcast_ref::<String>()
-                        .cloned()
-                        .or_else(|| cause.downcast_ref::<&str>().map(|s| s.to_string()))
-                        .unwrap_or(format!("{:?}", cause));
-                    Err(payload.into())
-                }
-            };
+        let test_result = match ::std::panic::catch_unwind(self.runner) {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(cause) => {
+                // We expect the cause payload to be a string or 'str
+                let payload = cause
+                    .downcast_ref::<String>()
+                    .cloned()
+                    .or_else(|| cause.downcast_ref::<&str>().map(|s| s.to_string()))
+                    .unwrap_or(format!("{:?}", cause));
+                Err(payload.into())
+            }
+        };
         if self.xfail {
             match test_result {
                 Ok(_) => Err("Test should fail".into()),
