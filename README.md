@@ -39,7 +39,7 @@ fn RunningProcess(cmd: Command) -> std::io::Result<Box<std::process::Child>> {
 }
 ```
 
-I have found not test framework allowing to have teardown on global fixtures.
+I have found no test framework allowing to have teardown on global fixtures.
 Storing the running process in a static LazyLock allow to have a simple "fixture" but, as statics are not drop, no
 teardown either.
 
@@ -75,10 +75,21 @@ harness = false
 [[test]]
 name = "other_test" # for a test located at "tests/other_test.rs"
 harness = false
+
+# For unit test, you also need to deactivate harness for lib
+[lib]
+harness = false
 ```
 
 You also need to add a main function in each of your integration tests. To do so add an empty main function and
 mark it with `#[rustest::main]` attribute.
+For unit testing, add the main function at end of you `lib.rs` file, under a `cfg(test)` flag:
+
+```rust
+#[cfg(test)]
+#[rustest::main]
+fn main () {}
+```
 
 
 ## Usage Examples
