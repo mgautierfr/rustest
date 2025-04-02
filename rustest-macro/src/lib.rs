@@ -2,13 +2,12 @@ mod fixture;
 mod test;
 mod utils;
 
-use core::convert::From;
+use core::{convert::From, sync::atomic::Ordering};
 use fixture::{FixtureAttr, fixture_impl};
 use proc_macro::TokenStream;
-use proc_macro2::{Ident, Span};
 use quote::quote;
 use syn::{ItemFn, parse_macro_input};
-use test::{TEST_COLLECTORS, TestAttr, test_impl};
+use test::{TEST_COUNT, TestAttr, test_impl};
 
 #[proc_macro_attribute]
 pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -34,19 +33,15 @@ pub fn fixture(args: TokenStream, input: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn main(_args: TokenStream, _input: TokenStream) -> TokenStream {
-    let test_ctors: Vec<_> =
-        std::mem::take::<Vec<String>>(TEST_COLLECTORS.lock().unwrap().as_mut())
-            .into_iter()
-            .map(|s| Ident::new(&s, Span::call_site()))
-            .collect();
-
+    let test_count = TEST_COUNT.load(Ordering::Relaxed);
     (quote! {
-        const TEST_CTORS: &[::rustest::TestCtorFn] = &[
-            #(#test_ctors),*
-        ];
+        static mut TEST_GENERATORS: [Option<::rustest::TestGeneratorFn>; #test_count] = [None; #test_count];
 
         fn main() -> std::process::ExitCode {
-            ::rustest::run_tests(TEST_CTORS)
+            // SAFETY: TEST_CTORS is filled only by functions run from outside of main.
+            // So when we are here, no one is modifying (neither read) it.
+            let test_registers = unsafe { TEST_GENERATORS.iter().map(|r| r.expect("Slot should be filled")).collect::<Vec<_>>() };
+            ::rustest::run_tests(&test_registers)
         }
     })
     .into()

@@ -10,29 +10,31 @@ pub use fixture::{Fixture, FixtureCreationError, FixtureDisplay, FixtureMatrix, 
 pub use test::{InnerTestResult, IntoError};
 pub use test::{Result, Test, TestContext};
 
+pub use ctor::declarative::ctor;
+
 /// Function creating a set of [Test] from a [TestContext].
 ///
 /// Classic function will resolve fixture matrix and generate a [Test] per combination.
 /// Such functions are implement by [test]
-pub type TestCtorFn =
+pub type TestGeneratorFn =
     fn(&mut TestContext) -> ::std::result::Result<Vec<Test>, FixtureCreationError>;
 
 /// Build tests from `test_ctors` and run them.
 ///
 /// You should not directly call it directly.
 /// Use [main] attribute on an empty main function.
-pub fn run_tests(test_ctors: &[TestCtorFn]) -> std::process::ExitCode {
+pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode {
     use libtest_mimic::{Arguments, run};
     let args = Arguments::from_args();
 
     let mut global_registry = FixtureRegistry::new();
 
-    let tests: ::std::result::Result<Vec<_>, FixtureCreationError> = test_ctors
+    let tests: ::std::result::Result<Vec<_>, FixtureCreationError> = test_generators
         .iter()
-        .map(|test_ctor| {
+        .map(|test_generator| {
             let mut test_registry = FixtureRegistry::new();
             let mut ctx = TestContext::new(&mut global_registry, &mut test_registry);
-            test_ctor(&mut ctx)
+            test_generator(&mut ctx)
         })
         .collect();
 
