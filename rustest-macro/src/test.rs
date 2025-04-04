@@ -50,11 +50,15 @@ impl Parse for TestAttr {
 
 pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, TokenStream> {
     let ItemFn {
-        sig, block, attrs, ..
+        mut sig,
+        block,
+        attrs,
+        ..
     } = input;
     let TestAttr { xfail, params } = args;
 
-    let ident = &sig.ident;
+    let ident = sig.ident.clone();
+    sig.ident = Ident::new("test", Span::call_site());
     let test_name = ident.to_string();
     let test_name_str = LitStr::new(&test_name, Span::call_site());
     let test_generator_ident = Ident::new(&format!("__{}_register", test_name), Span::call_site());
@@ -80,26 +84,24 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                 -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError> {
                 use ::rustest::IntoError;
 
-                // This is run our test with a set of input and convert it into err as needed.
-                let runner = |#(#call_args),*| {#ident::#ident(#(#call_args),*).into_error()};
-
-
                 // We have to call build a Test per combination of fixtures.
                 // Lets build a fixture_matrix.
                 let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#fixtures_build))*;
 
-                // Lets build a set of test_runners. They are taking no input and call the captured
-                // fixture combination as needed.
+                // Append a fixture identifier to test name if we have multiple fixtures instances
                 let test_name = if fixtures_matrix.is_multiple() {
                     |name| format!("{}[{}]", #test_name_str, name)
                 } else {
                     |name| #test_name_str.to_owned()
                 };
 
-                // Lets loop on all those runners and build a actual Test for each of them.
+                // Lets loop on all the fixture combinations and build a Test for each of them.
                 let tests = fixtures_matrix.call(
                     move |name, #(#call_args),* | ::rustest::Test::new(
-                        test_name(name), #is_xfail, move || runner(#(#call_args),*)
+                        test_name(name),
+                        #is_xfail,
+                        // The test runner is taking no input and and convert output to an error.
+                        move || #ident::test(#(#call_args),*).into_error()
                     )
                 )
                     .collect::<Vec<_>>();
