@@ -12,6 +12,7 @@ fn is_xfail(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("xfail"))
 }
 
+#[derive(Debug, PartialEq)]
 pub(crate) struct TestAttr {
     xfail: bool,
     params: Option<(syn::Type, syn::Expr)>,
@@ -126,13 +127,16 @@ mod tests {
     use syn::{ItemFn, parse_quote, parse2};
 
     #[test]
-    fn test_parse_test_attr() {
-        let input = quote! {
-            xfail
-        };
+    fn test_parse_test_attr_no_attr() {
+        let attr: TestAttr = parse_quote! {};
 
-        let attr = parse2::<TestAttr>(input).unwrap();
-        assert!(attr.xfail);
+        assert_eq!(
+            attr,
+            TestAttr {
+                xfail: false,
+                params: None
+            }
+        );
     }
 
     #[test]
@@ -143,6 +147,110 @@ mod tests {
 
         let result = parse2::<TestAttr>(input);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_test_xfail() {
+        let attr: TestAttr = parse_quote! {
+            xfail
+        };
+
+        assert_eq!(
+            attr,
+            TestAttr {
+                xfail: true,
+                params: None
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_test_params() {
+        let attr: TestAttr = parse_quote! {
+            params:(u32, u8)=[(10,5), (42, 58)]
+        };
+
+        assert_eq!(
+            attr,
+            TestAttr {
+                xfail: false,
+                params: Some((
+                    parse2::<syn::Type>(quote! { (u32,u8) }).unwrap(),
+                    parse2::<syn::Expr>(quote! { [(10,5),(42,58)] }).unwrap()
+                ))
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_test_xfail_params() {
+        let attr: TestAttr = parse_quote! {
+            xfail,
+            params:(u32, u8)=[(10,5), (42, 58)]
+        };
+
+        assert_eq!(
+            attr,
+            TestAttr {
+                xfail: true,
+                params: Some((
+                    parse2::<syn::Type>(quote! { (u32,u8) }).unwrap(),
+                    parse2::<syn::Expr>(quote! { [(10,5),(42,58)] }).unwrap()
+                ))
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_test_params_xfail() {
+        let attr: TestAttr = parse_quote! {
+            params:(u32, u8)=[(10,5), (42, 58)],
+            xfail
+        };
+
+        assert_eq!(
+            attr,
+            TestAttr {
+                xfail: true,
+                params: Some((
+                    parse2::<syn::Type>(quote! { (u32,u8) }).unwrap(),
+                    parse2::<syn::Expr>(quote! { [(10,5),(42,58)] }).unwrap()
+                ))
+            }
+        );
+    }
+
+    #[test]
+    fn test_isxfail_empty() {
+        let attr: Vec<Attribute> = vec![];
+
+        assert_eq!(is_xfail(&attr), false);
+    }
+
+    #[test]
+    fn test_isxfail_xfail() {
+        let attr: Vec<Attribute> = parse_quote! {#[xfail]};
+
+        assert_eq!(is_xfail(&attr), true);
+    }
+
+    #[test]
+    fn test_isxfail_xfail_other() {
+        let attr: Vec<Attribute> = parse_quote! {
+            #[xfail]
+            #[other]
+        };
+
+        assert_eq!(is_xfail(&attr), true);
+    }
+
+    #[test]
+    fn test_isxfail_other() {
+        let attr: Vec<Attribute> = parse_quote! {
+            #[other]
+        };
+
+        assert_eq!(is_xfail(&attr), false);
     }
 
     #[test]
