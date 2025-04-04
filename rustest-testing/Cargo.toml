@@ -13,7 +13,8 @@ categories.workspace = true
 [dependencies]
 
 [dev-dependencies]
-rustest = { path = "../rustest" }
+googletest = "0.14.0"
+rustest = { path = "../rustest", features = ["googletest"] }
 
 
 [lib]

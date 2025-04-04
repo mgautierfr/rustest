@@ -1,3 +1,4 @@
+use core::fmt::Display;
 use libtest_mimic::Failed;
 use std::error::Error;
 
@@ -5,6 +6,7 @@ use std::error::Error;
 pub type Result = std::result::Result<(), Box<dyn Error>>;
 
 #[doc(hidden)]
+
 pub struct InnerTestError {
     msg: String,
 }
@@ -18,6 +20,13 @@ impl InnerTestError {
 impl Display for InnerTestError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.msg)
+    }
+}
+
+#[cfg(feature = "googletest")]
+impl From<googletest::internal::test_outcome::TestFailure> for InnerTestError {
+    fn from(e: googletest::internal::test_outcome::TestFailure) -> Self {
+        Self { msg: e.to_string() }
     }
 }
 
@@ -58,11 +67,40 @@ impl IntoError for Result {
     }
 }
 
+#[cfg(feature = "googletest")]
+impl<T> IntoError for googletest::Result<T> {
+    fn into_error(self) -> InnerTestResult {
+        self.map(|_v| ())
+            .map_err(|e| InnerTestError::new(e.to_string()))
+    }
+}
+
 /// An actual test run by rustest
 pub struct Test {
     name: String,
     runner: Box<dyn FnOnce() -> InnerTestResult + Send + std::panic::UnwindSafe>,
     xfail: bool,
+}
+
+fn setup_gtest() {
+    #[cfg(feature = "googletest")]
+    {
+        use googletest::internal::test_outcome::TestOutcome;
+        TestOutcome::init_current_test_outcome();
+    }
+}
+
+fn collect_gtest(test_result: InnerTestResult) -> InnerTestResult {
+    #[cfg(not(feature = "googletest"))]
+    {
+        test_result
+    }
+
+    #[cfg(feature = "googletest")]
+    {
+        use googletest::internal::test_outcome::TestOutcome;
+        TestOutcome::close_current_test_outcome(test_result).map_err(|e| e.into())
+    }
 }
 
 impl Test {
@@ -78,6 +116,7 @@ impl Test {
         }
     }
     fn run(self) -> LibTestResult {
+        setup_gtest();
         let unwind_result = std::panic::catch_unwind(self.runner);
         let test_result = match unwind_result {
             Ok(Ok(())) => Ok(()),
@@ -92,6 +131,7 @@ impl Test {
                 Err(InnerTestError::new(payload))
             }
         };
+        let test_result = collect_gtest(test_result);
         if self.xfail {
             match test_result {
                 Ok(_) => Err("Test should fail".into()),
