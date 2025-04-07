@@ -90,7 +90,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
                 // Append a fixture identifier to test name if we have multiple fixtures instances
                 let test_name = if fixtures_matrix.is_multiple() {
-                    |name| format!("{}[{}]", #test_name_str, name)
+                    |name| format!("{}{}", #test_name_str, name)
                 } else {
                     |name| #test_name_str.to_owned()
                 };

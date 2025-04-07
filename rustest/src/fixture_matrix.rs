@@ -263,4 +263,12 @@ mod tests {
         assert_eq!(iter.next().unwrap(), (4, "Hello", 42));
         assert_eq!(iter.next().unwrap(), (4, "World", 42));
     }
+
+    #[test]
+    fn test_fixture_combination_display() {
+        let combination = FixtureCombination((5, false, "A text"));
+        assert_eq!(combination.display(), "[5|false|A text]");
+        let combination = FixtureCombination((5, false, (Box::new(42), vec![5; 3])));
+        assert_eq!(combination.display(), "[5|false|(42,[5,5,5])]");
+    }
 }
