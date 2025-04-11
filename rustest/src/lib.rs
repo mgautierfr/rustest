@@ -1,11 +1,15 @@
 #![allow(clippy::test_attr_in_doctest)]
 
 mod fixture;
+mod fixture_display;
+mod fixture_matrix;
 mod test;
 use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
-pub use fixture::{Fixture, FixtureCreationError, FixtureDisplay, FixtureMatrix, FixtureScope};
+pub use fixture::{Fixture, FixtureCreationError, FixtureScope};
+pub use fixture_display::FixtureDisplay;
+pub use fixture_matrix::FixtureMatrix;
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError};
 pub use test::{Result, Test, TestContext};

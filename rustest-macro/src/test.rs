@@ -12,6 +12,7 @@ fn is_xfail(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("xfail"))
 }
 
+#[derive(Debug, PartialEq)]
 pub(crate) struct TestAttr {
     xfail: bool,
     params: Option<(syn::Type, syn::Expr)>,
@@ -49,11 +50,15 @@ impl Parse for TestAttr {
 
 pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, TokenStream> {
     let ItemFn {
-        sig, block, attrs, ..
+        mut sig,
+        block,
+        attrs,
+        ..
     } = input;
     let TestAttr { xfail, params } = args;
 
-    let ident = &sig.ident;
+    let ident = sig.ident.clone();
+    sig.ident = Ident::new("test", Span::call_site());
     let test_name = ident.to_string();
     let test_name_str = LitStr::new(&test_name, Span::call_site());
     let test_generator_ident = Ident::new(&format!("__{}_register", test_name), Span::call_site());
@@ -79,26 +84,24 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                 -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError> {
                 use ::rustest::IntoError;
 
-                // This is run our test with a set of input and convert it into err as needed.
-                let runner = |#(#call_args),*| {#ident::#ident(#(#call_args),*).into_error()};
-
-
                 // We have to call build a Test per combination of fixtures.
                 // Lets build a fixture_matrix.
                 let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#fixtures_build))*;
 
-                // Lets build a set of test_runners. They are taking no input and call the captured
-                // fixture combination as needed.
+                // Append a fixture identifier to test name if we have multiple fixtures instances
                 let test_name = if fixtures_matrix.is_multiple() {
-                    |name| format!("{}[{}]", #test_name_str, name)
+                    |name| format!("{}{}", #test_name_str, name)
                 } else {
                     |name| #test_name_str.to_owned()
                 };
 
-                // Lets loop on all those runners and build a actual Test for each of them.
+                // Lets loop on all the fixture combinations and build a Test for each of them.
                 let tests = fixtures_matrix.call(
                     move |name, #(#call_args),* | ::rustest::Test::new(
-                        test_name(name), #is_xfail, move || runner(#(#call_args),*)
+                        test_name(name),
+                        #is_xfail,
+                        // The test runner is taking no input and and convert output to an error.
+                        move || #ident::test(#(#call_args),*).into_error()
                     )
                 )
                     .collect::<Vec<_>>();
@@ -126,13 +129,16 @@ mod tests {
     use syn::{ItemFn, parse_quote, parse2};
 
     #[test]
-    fn test_parse_test_attr() {
-        let input = quote! {
-            xfail
-        };
+    fn test_parse_test_attr_no_attr() {
+        let attr: TestAttr = parse_quote! {};
 
-        let attr = parse2::<TestAttr>(input).unwrap();
-        assert!(attr.xfail);
+        assert_eq!(
+            attr,
+            TestAttr {
+                xfail: false,
+                params: None
+            }
+        );
     }
 
     #[test]
@@ -143,6 +149,110 @@ mod tests {
 
         let result = parse2::<TestAttr>(input);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_test_xfail() {
+        let attr: TestAttr = parse_quote! {
+            xfail
+        };
+
+        assert_eq!(
+            attr,
+            TestAttr {
+                xfail: true,
+                params: None
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_test_params() {
+        let attr: TestAttr = parse_quote! {
+            params:(u32, u8)=[(10,5), (42, 58)]
+        };
+
+        assert_eq!(
+            attr,
+            TestAttr {
+                xfail: false,
+                params: Some((
+                    parse2::<syn::Type>(quote! { (u32,u8) }).unwrap(),
+                    parse2::<syn::Expr>(quote! { [(10,5),(42,58)] }).unwrap()
+                ))
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_test_xfail_params() {
+        let attr: TestAttr = parse_quote! {
+            xfail,
+            params:(u32, u8)=[(10,5), (42, 58)]
+        };
+
+        assert_eq!(
+            attr,
+            TestAttr {
+                xfail: true,
+                params: Some((
+                    parse2::<syn::Type>(quote! { (u32,u8) }).unwrap(),
+                    parse2::<syn::Expr>(quote! { [(10,5),(42,58)] }).unwrap()
+                ))
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_test_params_xfail() {
+        let attr: TestAttr = parse_quote! {
+            params:(u32, u8)=[(10,5), (42, 58)],
+            xfail
+        };
+
+        assert_eq!(
+            attr,
+            TestAttr {
+                xfail: true,
+                params: Some((
+                    parse2::<syn::Type>(quote! { (u32,u8) }).unwrap(),
+                    parse2::<syn::Expr>(quote! { [(10,5),(42,58)] }).unwrap()
+                ))
+            }
+        );
+    }
+
+    #[test]
+    fn test_isxfail_empty() {
+        let attr: Vec<Attribute> = vec![];
+
+        assert_eq!(is_xfail(&attr), false);
+    }
+
+    #[test]
+    fn test_isxfail_xfail() {
+        let attr: Vec<Attribute> = parse_quote! {#[xfail]};
+
+        assert_eq!(is_xfail(&attr), true);
+    }
+
+    #[test]
+    fn test_isxfail_xfail_other() {
+        let attr: Vec<Attribute> = parse_quote! {
+            #[xfail]
+            #[other]
+        };
+
+        assert_eq!(is_xfail(&attr), true);
+    }
+
+    #[test]
+    fn test_isxfail_other() {
+        let attr: Vec<Attribute> = parse_quote! {
+            #[other]
+        };
+
+        assert_eq!(is_xfail(&attr), false);
     }
 
     #[test]

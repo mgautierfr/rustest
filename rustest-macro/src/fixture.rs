@@ -225,7 +225,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             #where_predicate
         {
             fn display(&self) -> String {
-                format!("[{}:{}]", stringify!(#fixture_name), self.inner.display())
+                format!("{}:{}", stringify!(#fixture_name), self.inner.display())
             }
         }
 
