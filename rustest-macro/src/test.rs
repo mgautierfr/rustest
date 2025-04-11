@@ -1,12 +1,12 @@
+use core::sync::atomic::AtomicUsize;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-use std::sync::Mutex;
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, ItemFn, LitStr};
 
 use crate::utils::{gen_fixture_call, gen_param_fixture};
 
-pub(crate) static TEST_COLLECTORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+pub(crate) static TEST_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 fn is_xfail(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("xfail"))
@@ -56,8 +56,8 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
     let ident = &sig.ident;
     let test_name = ident.to_string();
     let test_name_str = LitStr::new(&test_name, Span::call_site());
-    let ctor_name = format!("__{}_add_test", test_name);
-    let ctor_ident = Ident::new(&ctor_name, Span::call_site());
+    let test_generator_ident = Ident::new(&format!("__{}_register", test_name), Span::call_site());
+    let test_register_ident = Ident::new(&format!("__{}_ctor", test_name), Span::call_site());
 
     let is_xfail = xfail || is_xfail(&attrs);
 
@@ -65,7 +65,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
     let param_fixture_def = gen_param_fixture(&params);
 
-    TEST_COLLECTORS.lock().unwrap().push(ctor_ident.to_string());
+    let test_idx = TEST_COUNT.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
 
     Ok(quote! {
 
@@ -75,7 +75,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                 pub(super) #sig #block
             }
 
-            fn #ctor_ident(ctx: &mut ::rustest::TestContext)
+            pub fn #test_generator_ident(ctx: &mut ::rustest::TestContext)
                 -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError> {
                 use ::rustest::IntoError;
 
@@ -103,6 +103,17 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                 )
                     .collect::<Vec<_>>();
                 Ok(tests)
+            }
+
+            ::rustest::ctor! {
+                #[ctor]
+                fn #test_register_ident() {
+                    // SAFETY: ctor are run outside of main, one after the others, so it is safe
+                    // to modify it.
+                    unsafe {
+                        crate::TEST_GENERATORS[#test_idx] = Some(#test_generator_ident);
+                    };
+                }
             }
 
     })

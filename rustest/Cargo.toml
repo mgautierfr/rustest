@@ -11,6 +11,7 @@ categories.workspace = true
 keywords.workspace = true
 
 [dependencies]
+ctor = { version = "0.4.1", features = ["__no_warn_on_missing_unsafe"] }
 libtest-mimic = "0.8.1"
 rustest-macro = { version = "0.1.0", path = "../rustest-macro" }
 
