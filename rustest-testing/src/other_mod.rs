@@ -5,6 +5,7 @@ pub fn addition(a: u32, b: u32) -> u32 {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use googletest::prelude::*;
     use rustest::test;
 
     #[test(params:(u32, u32, u32)=[
@@ -13,7 +14,8 @@ pub(crate) mod tests {
         (598318, 54876521, 55474839)
     ])]
     fn test_addition_ok(Param((a, b, expected)): Param) {
-        assert_eq!(addition(a, b), expected);
+        expect_that!(addition(a, b), eq(expected));
+        expect_that!(addition(b, a), eq(expected));
     }
 
     #[test(params:(u32, u32, u32)=[
@@ -23,6 +25,6 @@ pub(crate) mod tests {
     ])]
     #[xfail]
     fn test_addition_fail(Param((a, b, expected)): Param) {
-        assert_eq!(addition(a, b), expected);
+        assert_that!(addition(a, b), eq(expected));
     }
 }

@@ -1,3 +1,4 @@
+use core::fmt::Display;
 use libtest_mimic::Failed;
 use std::error::Error;
 
@@ -5,12 +6,44 @@ use std::error::Error;
 pub type Result = std::result::Result<(), Box<dyn Error>>;
 
 #[doc(hidden)]
-/// The result of test runned by libtest_mimic.
+
+pub struct InnerTestError {
+    msg: String,
+}
+
+impl InnerTestError {
+    fn new(msg: impl Into<String>) -> Self {
+        Self { msg: msg.into() }
+    }
+}
+
+impl Display for InnerTestError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.msg)
+    }
+}
+
+#[cfg(feature = "googletest")]
+impl From<googletest::internal::test_outcome::TestFailure> for InnerTestError {
+    fn from(e: googletest::internal::test_outcome::TestFailure) -> Self {
+        Self { msg: e.to_string() }
+    }
+}
+
+/// The result of test runned by rustest.
 ///
-/// InnerTestResult is necessary as it is what expected by libtest_mimic.
+/// InnerTestResult is necessary as we are somehow between user (`Result`) and libtest_mimic (`LibTestResult`).
+/// In the same time, we want to integrate with googletest and it needs us to be `Display`.
 /// User test is returning a Result and is converted to InnerTestResult with IntoError
 /// trait.
-pub type InnerTestResult = std::result::Result<(), Failed>;
+pub type InnerTestResult = std::result::Result<(), InnerTestError>;
+
+/// The result of test runned by libtest_mimic.
+///
+/// LibTestResult is necessary as it is what expected by libtest_mimic.
+/// User test is returning a Result and is converted to InnerTestResult with IntoError
+/// trait.
+pub type LibTestResult = std::result::Result<(), Failed>;
 
 use super::{Fixture, FixtureCreationError, FixtureRegistry, FixtureScope};
 use std::any::Any;
@@ -29,7 +62,16 @@ impl IntoError for () {
 
 impl IntoError for Result {
     fn into_error(self) -> InnerTestResult {
-        self.map(|_v| ()).map_err(|e| e.to_string().into())
+        self.map(|_v| ())
+            .map_err(|e| InnerTestError::new(e.to_string()))
+    }
+}
+
+#[cfg(feature = "googletest")]
+impl<T> IntoError for googletest::Result<T> {
+    fn into_error(self) -> InnerTestResult {
+        self.map(|_v| ())
+            .map_err(|e| InnerTestError::new(e.to_string()))
     }
 }
 
@@ -38,6 +80,27 @@ pub struct Test {
     name: String,
     runner: Box<dyn FnOnce() -> InnerTestResult + Send + std::panic::UnwindSafe>,
     xfail: bool,
+}
+
+fn setup_gtest() {
+    #[cfg(feature = "googletest")]
+    {
+        use googletest::internal::test_outcome::TestOutcome;
+        TestOutcome::init_current_test_outcome();
+    }
+}
+
+fn collect_gtest(test_result: InnerTestResult) -> InnerTestResult {
+    #[cfg(not(feature = "googletest"))]
+    {
+        test_result
+    }
+
+    #[cfg(feature = "googletest")]
+    {
+        use googletest::internal::test_outcome::TestOutcome;
+        TestOutcome::close_current_test_outcome(test_result).map_err(|e| e.into())
+    }
 }
 
 impl Test {
@@ -52,8 +115,10 @@ impl Test {
             runner: Box::new(runner),
         }
     }
-    fn run(self) -> InnerTestResult {
-        let test_result = match ::std::panic::catch_unwind(self.runner) {
+    fn run(self) -> LibTestResult {
+        setup_gtest();
+        let unwind_result = std::panic::catch_unwind(self.runner);
+        let test_result = match unwind_result {
             Ok(Ok(())) => Ok(()),
             Ok(Err(e)) => Err(e),
             Err(cause) => {
@@ -63,16 +128,17 @@ impl Test {
                     .cloned()
                     .or_else(|| cause.downcast_ref::<&str>().map(|s| s.to_string()))
                     .unwrap_or(format!("{:?}", cause));
-                Err(payload.into())
+                Err(InnerTestError::new(payload))
             }
         };
+        let test_result = collect_gtest(test_result);
         if self.xfail {
             match test_result {
                 Ok(_) => Err("Test should fail".into()),
                 Err(_) => Ok(()),
             }
         } else {
-            test_result
+            Ok(test_result?)
         }
     }
 }

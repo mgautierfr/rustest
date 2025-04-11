@@ -1,4 +1,117 @@
 #![allow(clippy::test_attr_in_doctest)]
+//! rustest, an advance test harness.
+//!
+//! This crate provides mainly tree macros ([fixture], [test] and [main]) to setup you tests and their dependencies.
+//!
+//! ```
+//! use rustest::{test, *};
+//!
+//! #[fixture]
+//! fn SomeInput() -> u32 {
+//!     42
+//! }
+//!
+//! #[test]
+//! fn test_42(input: SomeInput) {
+//!     assert_eq!(*input, 42);
+//! }
+//!
+//! #[main]
+//! fn main() {}
+//! ```
+//!
+//! # Setup
+//!
+//! Add rustest to your `Cargo.toml` file:
+//!
+//! ```shell
+//! $ cargo add --dev rustest
+//! ```
+//!
+//! Rustest comes with its own test harness, so you must deactivate the default one in Cargo.toml:
+//!
+//! ```toml
+//! # In Cargo.toml
+//!
+//! [[test]]
+//! name = "test_name" # for a test located at "tests/test_name.rs"
+//! harness = false
+//!
+//! [[test]]
+//! name = "other_test" # for a test located at "tests/other_test.rs"
+//! harness = false
+//!
+//! # For unit test, you also need to deactivate harness for lib
+//! [lib]
+//! harness = false
+//! ```
+//!
+//! You also need to add a main function in each of your integration tests. To do so add an empty main function and
+//! mark it with `#[rustest::main]` attribute:
+//!
+//! ```rust
+//! #[rustest::main]
+//! fn main () {}
+//! ```
+//!
+//! For unit testing, add the main function at end of you `lib.rs` file, but add a `cfg(test)` to add it only for tests:
+//!
+//! ```nocompile
+//! #[cfg(test)]
+//! #[rustest::main]
+//! fn main() {}
+//! ```
+//!
+//! # Feature flags
+//!
+//! * **googletest**: Add support for [googletest](https://crates.io/crates/googletest) matchers. See [Using google test](#using-google-test) section.
+//!
+//! # Using google test
+//!
+//! If feature flag `googletest` is activated, you can use googletest matchers. You don't need to mark you tests with `#[gtest]`.
+//!
+//! ```
+//! use googletest::prelude::*;
+//! use rustest::{test, *};
+//!
+//! #[fixture]
+//! fn Value() -> u32 { 2 }
+//!
+//! #[test]
+//! fn succeed(value: Value) {
+//!     assert_that!(value, eq(2));
+//! }
+//!
+//! #[test]
+//! #[xfail]
+//! fn fails_and_panics(value: Value) {
+//!     assert_that!(value, eq(4));
+//! }
+//!
+//! #[test]
+//! #[xfail]
+//! fn two_logged_failures(value: Value) {
+//!     expect_that!(value, eq(4)); // Test now failed, but continues executing.
+//!     expect_that!(value, eq(5)); // Second failure is also logged.
+//! }
+//!
+//! #[test]
+//! #[xfail]
+//! fn fails_immediately_without_panic(value: Value) -> googletest::Result<()> {
+//!     verify_that!(value, eq(4))?; // Test fails and aborts.
+//!     verify_that!(value, eq(2))?; // Never executes.
+//!     Ok(())
+//! }
+//!
+//! #[test]
+//! #[xfail]
+//! fn simple_assertion(value: Value) -> googletest::Result<()> {
+//!     verify_that!(value, eq(4)) // One can also just return the last assertion.
+//! }
+//!
+//! #[rustest::main]
+//! fn main () {}
+//! ```
 
 mod fixture;
 mod fixture_display;
