@@ -1,4 +1,5 @@
 mod other_mod;
+mod sequential;
 
 pub use other_mod::*;
 
