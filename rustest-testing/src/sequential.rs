@@ -33,21 +33,12 @@ pub(crate) mod tests {
     use std::thread::sleep;
     use std::time::{Duration, UNIX_EPOCH};
 
-    struct ClientWrapper(pub super::Client);
-
-    impl Deref for ClientWrapper {
-        type Target = super::Client;
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
     #[fixture(scope=global)]
-    fn Client() -> Mutex<ClientWrapper> {
-        Mutex::new(ClientWrapper(super::Client::new()))
+    fn Client() -> Mutex<super::Client> {
+        Mutex::new(super::Client::new())
     }
 
-    impl FixtureDisplay for ClientWrapper {
+    impl FixtureDisplay for super::Client {
         fn display(&self) -> String {
             "client".to_string()
         }
