@@ -1,4 +1,5 @@
 use core::{clone::Clone, ops::Deref};
+use std::sync::Mutex;
 
 /// A trait to display fixtures when we have multiple combination for a test.
 ///
@@ -63,6 +64,12 @@ impl<T: FixtureDisplay> FixtureDisplay for Vec<T> {
     fn display(&self) -> String {
         let vec = self.iter().map(|v| v.display()).collect::<Vec<_>>();
         format!("[{}]", vec.join(","))
+    }
+}
+
+impl<T: FixtureDisplay> FixtureDisplay for Mutex<T> {
+    fn display(&self) -> String {
+        self.lock().unwrap().display()
     }
 }
 
@@ -251,6 +258,11 @@ mod tests {
         assert_eq!(Vec::<u32>::new().display(), "[]");
         assert_eq!(vec![42585u32].display(), "[42585]");
         assert_eq!(vec![4, 5].display(), "[4,5]");
+    }
+
+    #[test]
+    fn test_mutex() {
+        assert_eq!(Mutex::new("a text").display(), "a text");
     }
 
     #[test]

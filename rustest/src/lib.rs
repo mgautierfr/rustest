@@ -1,7 +1,7 @@
 #![allow(clippy::test_attr_in_doctest)]
 //! rustest, an advance test harness.
 //!
-//! This crate provides mainly tree macros ([fixture], [test] and [main]) to setup you tests and their dependencies.
+//! This crate provides mainly three macros ([fixture], [test] and [main]) to set up your tests and their dependencies.
 //!
 //! ```
 //! use rustest::{test, *};
