@@ -1,5 +1,7 @@
 use rustest::{test, *};
 
+pub mod sequential_test;
+
 #[fixture]
 fn Number() -> u32 {
     eprintln!("BUILD Number");
