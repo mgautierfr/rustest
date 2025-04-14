@@ -1,5 +1,6 @@
 mod other_mod;
 mod sub_module_fixture;
+pub mod sequential;
 
 pub use other_mod::*;
 
