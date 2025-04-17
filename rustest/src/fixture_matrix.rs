@@ -23,8 +23,8 @@ where
 /// `FixtureMatrix` is used to manage a collection of fixtures.
 /// It acts as an increasing matrix of dimension N as we feed it with new fixtures vector.
 #[derive(Default)]
-pub struct FixtureMatrix<KnownTypes> {
-    fixtures: Vec<FixtureCombination<KnownTypes>>,
+pub struct FixtureMatrix<BuildersTypes> {
+    builders: BuildersTypes,
     multiple: bool,
 }
 
@@ -39,7 +39,7 @@ impl FixtureMatrix<()> {
     /// Creates a new `FixtureMatrix` with 0 dimension.
     pub fn new() -> Self {
         Self {
-            fixtures: Vec::new(),
+            builders: (),
             multiple: false,
         }
     }
@@ -55,13 +55,12 @@ impl FixtureMatrix<()> {
     /// # Returns
     ///
     /// A new `FixtureMatrix` of dimension 1 containing the fed fixtures.
-    pub fn feed<T: Clone>(self, new_fixs: Vec<T>) -> FixtureMatrix<(T,)> {
+    pub fn feed<T>(self, new_fixs: Vec<T>) -> FixtureMatrix<(Vec<T>,)> {
         let multiple = self.multiple || new_fixs.len() > 1;
-        let fixtures = new_fixs
-            .iter()
-            .map(move |new| (FixtureCombination((new.clone(),))))
-            .collect::<Vec<_>>();
-        FixtureMatrix { fixtures, multiple }
+        FixtureMatrix {
+            builders: (new_fixs,),
+            multiple,
+        }
     }
 
     /// Call the function f... with no fixture as this FixtureMatrix is dimension 0.
@@ -73,7 +72,7 @@ impl FixtureMatrix<()> {
     }
 }
 
-macro_rules! impl_multiple_fixture_stuff {
+macro_rules! impl_fixture_display {
     (($($types:tt),+), ($($names:ident),+)) => {
 
         impl< $($types),+ > FixtureDisplay for FixtureCombination<($($types),+,)>
@@ -87,8 +86,70 @@ macro_rules! impl_multiple_fixture_stuff {
                 format!("[{}]", vec.join("|"))
             }
         }
+    }
+}
 
-        impl<$($types),+> FixtureMatrix<($($types),+,)> where
+impl_fixture_display!((F0), (f0));
+impl_fixture_display!((F0, F1), (f0, f1));
+impl_fixture_display!((F0, F1, F2), (f0, f1, f2));
+impl_fixture_display!((F0, F1, F2, F3), (f0, f1, f2, f3));
+impl_fixture_display!((F0, F1, F2, F3, F4), (f0, f1, f2, f3, f4));
+impl_fixture_display!((F0, F1, F2, F3, F4, F5), (f0, f1, f2, f3, f4, f5));
+impl_fixture_display!((F0, F1, F2, F3, F4, F5, F6), (f0, f1, f2, f3, f4, f5, f6));
+impl_fixture_display!(
+    (F0, F1, F2, F3, F4, F5, F6, F7),
+    (f0, f1, f2, f3, f4, f5, f6, f7)
+);
+impl_fixture_display!(
+    (F0, F1, F2, F3, F4, F5, F6, F7, F8),
+    (f0, f1, f2, f3, f4, f5, f6, f7, f8)
+);
+impl_fixture_display!(
+    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9),
+    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9)
+);
+impl_fixture_display!(
+    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10),
+    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10)
+);
+impl_fixture_display!(
+    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11),
+    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11)
+);
+
+macro_rules! iter_builder {
+    (@call $func:expr => $collect:expr ; $last_name:ident ; $last_builder:expr ; ) => {
+        for $last_name in $last_builder.iter() {
+            use crate::fixture_display::FixtureDisplay;
+            let tule = ($last_name.clone(), );
+            let name = FixtureCombination( tule ).display();
+            $collect.push($func(name , $last_name.clone()))
+        }
+    };
+    (@call $func:expr => $collect:expr ; $last_name:ident ; $last_builder:expr ; $($known:tt),*) => {
+        for $last_name in $last_builder.iter() {
+            use crate::fixture_display::FixtureDisplay;
+            let tule = ($($known.clone()),* ,$last_name.clone());
+            let name = FixtureCombination( tule ).display();
+            $collect.push($func(name, $($known.clone()),* , $last_name.clone()))
+        }
+    };
+    (@call $func:expr => $collect:expr ; $first_name:tt, $($other_names:ident),* ; $first_builder:expr, $($other_builders:expr),* ; ) => {
+        for $first_name in $first_builder.iter() {
+            iter_builder!(@call $func => $collect ; $($other_names),* ; $($other_builders),* ; $first_name)
+        }
+    };
+    (@call $func:expr => $collect:expr ; $first_name:tt, $($other_names:ident),* ; $first_builder:expr, $($other_builders:expr),* ; $($known:expr),*) => {
+        for $first_name in $first_builder.iter() {
+            iter_builder!(@call $func => $collect ; $($other_names),* ; $($other_builders),* ; $($known),* , $first_name)
+        }
+    };
+}
+
+macro_rules! impl_fixture_call {
+    (($($types:tt),+), ($($bnames:ident),+), ($($fnames:ident),+)) => {
+
+        impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
             $($types : Clone + Send + UnwindSafe + FixtureDisplay + 'static),+ ,
         {
             pub fn call<F, Output>(
@@ -98,14 +159,65 @@ macro_rules! impl_multiple_fixture_stuff {
                 where
                 F: Fn(String, $($types),+) -> Output + Send + Sync + UnwindSafe + RefUnwindSafe + 'static,
             {
-                self.fixtures
-                    .into_iter()
-                    .map(move |fix| {
-                        let name = fix.display();
-                        let FixtureCombination(($($names),+, )) = fix;
-                        f(name, $($names),+)
-                    })
+                let ($($bnames),+, ) = self.builders;
+                let mut output = vec![];
+                iter_builder!(@call f => output ; $($fnames),+ ; $($bnames),+ ;);
+                output.into_iter()
             }
+        }
+    }
+}
+
+impl_fixture_call!((F0), (b0), (f0));
+impl_fixture_call!((F0, F1), (b0, b1), (f0, f1));
+impl_fixture_call!((F0, F1, F2), (b0, b1, b2), (f0, f1, f2));
+impl_fixture_call!((F0, F1, F2, F3), (b0, b1, b2, b3), (f0, f1, f2, f3));
+impl_fixture_call!(
+    (F0, F1, F2, F3, F4),
+    (b0, b1, b2, b3, b4),
+    (f0, f1, f2, f3, f4)
+);
+impl_fixture_call!(
+    (F0, F1, F2, F3, F4, F5),
+    (b0, b1, b2, b3, b4, b5),
+    (f0, f1, f2, f3, f4, f5)
+);
+impl_fixture_call!(
+    (F0, F1, F2, F3, F4, F5, F6),
+    (b0, b1, b2, b3, b4, b5, b6),
+    (f0, f1, f2, f3, f4, f5, f6)
+);
+impl_fixture_call!(
+    (F0, F1, F2, F3, F4, F5, F6, F7),
+    (b0, b1, b2, b3, b4, b5, b6, b7),
+    (f0, f1, f2, f3, f4, f5, f6, f7)
+);
+impl_fixture_call!(
+    (F0, F1, F2, F3, F4, F5, F6, F7, F8),
+    (b0, b1, b2, b3, b4, b5, b6, b7, b8),
+    (f0, f1, f2, f3, f4, f5, f6, f7, f8)
+);
+impl_fixture_call!(
+    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9),
+    (b0, b1, b2, b3, b4, b5, b6, b7, b8, b9),
+    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9)
+);
+impl_fixture_call!(
+    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10),
+    (b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10),
+    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10)
+);
+impl_fixture_call!(
+    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11),
+    (b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11),
+    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11)
+);
+
+macro_rules! impl_fixture_feed {
+    (($($types:tt),+), ($($names:ident),+)) => {
+        impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
+            $($types : Clone + Send + UnwindSafe + FixtureDisplay + 'static),+ ,
+        {
 
             /// Feeds new fixtures into the matrix.
             ///
@@ -116,50 +228,40 @@ macro_rules! impl_multiple_fixture_stuff {
             /// # Returns
             ///
             /// A new `FixtureMatrix` containing the fed fixtures.
-            pub fn feed<T: Clone>(self, new_fixs: Vec<T>) -> FixtureMatrix<($($types),+ ,T)> {
+            pub fn feed<T>(self, new_fixs: Vec<T>) -> FixtureMatrix<($(Vec<$types>),+ ,Vec<T>)> {
                 let multiple = self.multiple || new_fixs.len() > 1;
-                let fixtures = self
-                    .fixtures
-                    .into_iter()
-                    .flat_map(|existing| {
-                        new_fixs
-                            .iter()
-                            .map(move |new| {
-                                let FixtureCombination(($($names),+, )) = existing.clone();
-                                FixtureCombination(($($names),+ , new.clone()))
-                            })
-                    })
-                    .collect::<Vec<_>>();
-                FixtureMatrix { fixtures, multiple }
+                                let ($($names),+, ) = self.builders;
+                                let builders = ($($names),+ , new_fixs);
+                FixtureMatrix { builders, multiple }
             }
         }
     };
 }
 
-impl_multiple_fixture_stuff!((F0), (f0));
-impl_multiple_fixture_stuff!((F0, F1), (f0, f1));
-impl_multiple_fixture_stuff!((F0, F1, F2), (f0, f1, f2));
-impl_multiple_fixture_stuff!((F0, F1, F2, F3), (f0, f1, f2, f3));
-impl_multiple_fixture_stuff!((F0, F1, F2, F3, F4), (f0, f1, f2, f3, f4));
-impl_multiple_fixture_stuff!((F0, F1, F2, F3, F4, F5), (f0, f1, f2, f3, f4, f5));
-impl_multiple_fixture_stuff!((F0, F1, F2, F3, F4, F5, F6), (f0, f1, f2, f3, f4, f5, f6));
-impl_multiple_fixture_stuff!(
+impl_fixture_feed!((F0), (f0));
+impl_fixture_feed!((F0, F1), (f0, f1));
+impl_fixture_feed!((F0, F1, F2), (f0, f1, f2));
+impl_fixture_feed!((F0, F1, F2, F3), (f0, f1, f2, f3));
+impl_fixture_feed!((F0, F1, F2, F3, F4), (f0, f1, f2, f3, f4));
+impl_fixture_feed!((F0, F1, F2, F3, F4, F5), (f0, f1, f2, f3, f4, f5));
+impl_fixture_feed!((F0, F1, F2, F3, F4, F5, F6), (f0, f1, f2, f3, f4, f5, f6));
+impl_fixture_feed!(
     (F0, F1, F2, F3, F4, F5, F6, F7),
     (f0, f1, f2, f3, f4, f5, f6, f7)
 );
-impl_multiple_fixture_stuff!(
+impl_fixture_feed!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8)
 );
-impl_multiple_fixture_stuff!(
+impl_fixture_feed!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9)
 );
-impl_multiple_fixture_stuff!(
+impl_fixture_feed!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10)
 );
-impl_multiple_fixture_stuff!(
+impl_fixture_feed!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11)
 );
@@ -224,13 +326,14 @@ mod tests {
         let matrix = FixtureMatrix::new()
             .feed(vec![DummyFixture(1), DummyFixture(2), DummyFixture(3)])
             .feed(vec![DummyFixture("Hello"), DummyFixture("World")]);
-        assert_eq!(matrix.fixtures.len(), 6);
-        assert_eq!(matrix.fixtures[0], (DummyFixture(1), DummyFixture("Hello")));
-        assert_eq!(matrix.fixtures[1], (DummyFixture(1), DummyFixture("World")));
-        assert_eq!(matrix.fixtures[2], (DummyFixture(2), DummyFixture("Hello")));
-        assert_eq!(matrix.fixtures[3], (DummyFixture(2), DummyFixture("World")));
-        assert_eq!(matrix.fixtures[4], (DummyFixture(3), DummyFixture("Hello")));
-        assert_eq!(matrix.fixtures[5], (DummyFixture(3), DummyFixture("World")));
+        assert_eq!(
+            matrix.builders.0,
+            vec![DummyFixture(1), DummyFixture(2), DummyFixture(3)]
+        );
+        assert_eq!(
+            matrix.builders.1,
+            vec![DummyFixture("Hello"), DummyFixture("World")]
+        );
     }
 
     #[test]
