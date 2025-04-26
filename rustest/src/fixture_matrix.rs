@@ -1,6 +1,6 @@
 use core::{clone::Clone, cmp::PartialEq, panic::UnwindSafe};
 
-use super::FixtureDisplay;
+use super::{Fixture, FixtureDisplay};
 
 #[derive(Clone, Debug)]
 pub struct FixtureCombination<KnownType>(KnownType);
@@ -32,7 +32,7 @@ macro_rules! impl_fixture_combination_call {
     (($($types:tt),+), ($($names:ident),+)) => {
 
         impl<$($types),+> FixtureCombination<($($types),+,)> where
-            $($types : Clone + Send + UnwindSafe + FixtureDisplay + 'static),+ ,
+            $($types : Clone + Send + UnwindSafe + Fixture + 'static),+ ,
         {
             pub fn call<F, Output>(
                 self,
@@ -43,7 +43,7 @@ macro_rules! impl_fixture_combination_call {
             {
                 let name = self.display();
                 let ($($names),+, ) = self.0;
-                f(name, $($names),+)
+                f(name, $($names.build()),+)
             }
         }
     }
@@ -334,6 +334,10 @@ mod tests {
             Self: Sized,
         {
             unimplemented!()
+        }
+
+        fn build(&self) -> Self {
+            self.clone()
         }
 
         fn scope() -> FixtureScope {

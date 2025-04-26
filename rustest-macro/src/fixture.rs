@@ -262,6 +262,10 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                 Ok(inners.into_iter().map(|i| Self::new(i)).collect())
             }
 
+            fn build(&self) -> Self {
+                self.clone()
+            }
+
             fn scope() -> ::rustest::FixtureScope { #scope }
         }
 

@@ -48,6 +48,10 @@ pub(crate) fn gen_param_fixture(params: &Option<(Type, Expr)>) -> TokenStream {
                     Ok(#expr.into_iter().map(|i| Self::new(i)).collect())
                 }
 
+                fn build(&self) -> Self {
+                    self.clone()
+                }
+
                 fn scope() -> ::rustest::FixtureScope { ::rustest::FixtureScope::Test }
             }
 

@@ -63,6 +63,10 @@ pub trait Fixture:
     where
         Self: Sized;
 
+    fn build(&self) -> Self
+    where
+        Self: Sized;
+
     /// Returns the scope of the fixture.
     ///
     /// # Returns
