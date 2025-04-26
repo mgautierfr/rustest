@@ -18,6 +18,70 @@ where
     }
 }
 
+macro_rules! impl_fixture_combination_call {
+    ((), ()) => {
+        impl FixtureCombination<()> where
+        {
+            pub fn call<F, Output>(
+                self,
+                f: F,
+            ) -> Output
+                where
+                F: Fn(String) -> Output,
+            {
+                f("".into())
+            }
+        }
+    };
+    (($($types:tt),+), ($($names:ident),+)) => {
+
+        impl<$($types),+> FixtureCombination<($($types),+,)> where
+            $($types : Clone + Send + UnwindSafe + FixtureDisplay + 'static),+ ,
+        {
+            pub fn call<F, Output>(
+                self,
+                f: F,
+            ) -> Output
+                where
+                F: Fn(String, $($types),+) -> Output,
+            {
+                let name = self.display();
+                let ($($names),+, ) = self.0;
+                f(name, $($names),+)
+            }
+        }
+    }
+}
+
+impl_fixture_combination_call!((), ());
+impl_fixture_combination_call!((F0), (f0));
+impl_fixture_combination_call!((F0, F1), (f0, f1));
+impl_fixture_combination_call!((F0, F1, F2), (f0, f1, f2));
+impl_fixture_combination_call!((F0, F1, F2, F3), (f0, f1, f2, f3));
+impl_fixture_combination_call!((F0, F1, F2, F3, F4), (f0, f1, f2, f3, f4));
+impl_fixture_combination_call!((F0, F1, F2, F3, F4, F5), (f0, f1, f2, f3, f4, f5));
+impl_fixture_combination_call!((F0, F1, F2, F3, F4, F5, F6), (f0, f1, f2, f3, f4, f5, f6));
+impl_fixture_combination_call!(
+    (F0, F1, F2, F3, F4, F5, F6, F7),
+    (f0, f1, f2, f3, f4, f5, f6, f7)
+);
+impl_fixture_combination_call!(
+    (F0, F1, F2, F3, F4, F5, F6, F7, F8),
+    (f0, f1, f2, f3, f4, f5, f6, f7, f8)
+);
+impl_fixture_combination_call!(
+    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9),
+    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9)
+);
+impl_fixture_combination_call!(
+    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10),
+    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10)
+);
+impl_fixture_combination_call!(
+    (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11),
+    (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11)
+);
+
 /// A matrix of fixtures.
 ///
 /// `FixtureMatrix` is used to manage a collection of fixtures.
@@ -68,7 +132,7 @@ impl FixtureMatrix<()> {
     where
         F: Fn(String) -> Output,
     {
-        vec![(f("".into()))].into_iter()
+        vec![FixtureCombination(()).call(f)].into_iter()
     }
 }
 
@@ -120,18 +184,14 @@ impl_fixture_display!(
 macro_rules! iter_builder {
     (@call $func:expr => $collect:expr ; $last_name:ident ; $last_builder:expr ; ) => {
         for $last_name in $last_builder.iter() {
-            use crate::fixture_display::FixtureDisplay;
-            let tule = ($last_name.clone(), );
-            let name = FixtureCombination( tule ).display();
-            $collect.push($func(name , $last_name.clone()))
+            let combination = FixtureCombination(($last_name.clone(), ));
+            $collect.push(combination.call(&$func))
         }
     };
     (@call $func:expr => $collect:expr ; $last_name:ident ; $last_builder:expr ; $($known:tt),*) => {
         for $last_name in $last_builder.iter() {
-            use crate::fixture_display::FixtureDisplay;
-            let tule = ($($known.clone()),* ,$last_name.clone());
-            let name = FixtureCombination( tule ).display();
-            $collect.push($func(name, $($known.clone()),* , $last_name.clone()))
+            let combination = FixtureCombination(($($known.clone()),*, $last_name.clone()));
+            $collect.push(combination.call(&$func))
         }
     };
     (@call $func:expr => $collect:expr ; $first_name:tt, $($other_names:ident),* ; $first_builder:expr, $($other_builders:expr),* ; ) => {
