@@ -248,13 +248,15 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                     // We have to call this function for each combination of its fixtures.
                     // Lets build a fixture_matrix.
                     let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_build))*;
+                    let combinations = fixtures_matrix.flatten();
 
-
-                    fixtures_matrix
+                    combinations.into_iter().map(|c|
                         // call do not call the lambda but return a new callable which will call the input builder with
                         // the right fixture combination.
-                        .call(move | _, #(#call_args),* | user_provided_setup_as_result(#(#call_args),*))
-                        .collect::<std::result::Result<Vec<_>, _>>()
+                        c.call(move | _, #(#call_args),* | user_provided_setup_as_result(#(#call_args),*))
+                    )
+                    .collect::<std::result::Result<Vec<_>, _>>()
+
                 };
                 let inners = Self::InnerType::build::<Self, _>(ctx, builders, #teardown)?;
                 Ok(inners.into_iter().map(|i| Self::new(i)).collect())

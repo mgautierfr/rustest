@@ -1,8 +1,4 @@
-use core::{
-    clone::Clone,
-    cmp::PartialEq,
-    panic::{RefUnwindSafe, UnwindSafe},
-};
+use core::{clone::Clone, cmp::PartialEq, panic::UnwindSafe};
 
 use super::FixtureDisplay;
 
@@ -128,11 +124,8 @@ impl FixtureMatrix<()> {
     }
 
     /// Call the function f... with no fixture as this FixtureMatrix is dimension 0.
-    pub fn call<F, Output>(self, f: F) -> impl Iterator<Item = Output>
-    where
-        F: Fn(String) -> Output,
-    {
-        vec![FixtureCombination(()).call(f)].into_iter()
+    pub fn flatten(self) -> Vec<FixtureCombination<()>> {
+        vec![FixtureCombination(())]
     }
 }
 
@@ -182,26 +175,26 @@ impl_fixture_display!(
 );
 
 macro_rules! iter_builder {
-    (@call $func:expr => $collect:expr ; $last_name:ident ; $last_builder:expr ; ) => {
+    (@call $collect:expr ; $last_name:ident ; $last_builder:expr ; ) => {
         for $last_name in $last_builder.iter() {
             let combination = FixtureCombination(($last_name.clone(), ));
-            $collect.push(combination.call(&$func))
+            $collect.push(combination)
         }
     };
-    (@call $func:expr => $collect:expr ; $last_name:ident ; $last_builder:expr ; $($known:tt),*) => {
+    (@call $collect:expr ; $last_name:ident ; $last_builder:expr ; $($known:tt),*) => {
         for $last_name in $last_builder.iter() {
             let combination = FixtureCombination(($($known.clone()),*, $last_name.clone()));
-            $collect.push(combination.call(&$func))
+            $collect.push(combination)
         }
     };
-    (@call $func:expr => $collect:expr ; $first_name:tt, $($other_names:ident),* ; $first_builder:expr, $($other_builders:expr),* ; ) => {
+    (@call $collect:expr ; $first_name:tt, $($other_names:ident),* ; $first_builder:expr, $($other_builders:expr),* ; ) => {
         for $first_name in $first_builder.iter() {
-            iter_builder!(@call $func => $collect ; $($other_names),* ; $($other_builders),* ; $first_name)
+            iter_builder!(@call $collect ; $($other_names),* ; $($other_builders),* ; $first_name)
         }
     };
-    (@call $func:expr => $collect:expr ; $first_name:tt, $($other_names:ident),* ; $first_builder:expr, $($other_builders:expr),* ; $($known:expr),*) => {
+    (@call $collect:expr ; $first_name:tt, $($other_names:ident),* ; $first_builder:expr, $($other_builders:expr),* ; $($known:expr),*) => {
         for $first_name in $first_builder.iter() {
-            iter_builder!(@call $func => $collect ; $($other_names),* ; $($other_builders),* ; $($known),* , $first_name)
+            iter_builder!(@call $collect ; $($other_names),* ; $($other_builders),* ; $($known),* , $first_name)
         }
     };
 }
@@ -212,17 +205,12 @@ macro_rules! impl_fixture_call {
         impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
             $($types : Clone + Send + UnwindSafe + FixtureDisplay + 'static),+ ,
         {
-            pub fn call<F, Output>(
-                self,
-                f: F,
-            ) -> impl Iterator<Item = Output>
-                where
-                F: Fn(String, $($types),+) -> Output + Send + Sync + UnwindSafe + RefUnwindSafe + 'static,
+            pub fn flatten(self) -> Vec<FixtureCombination<($($types),+,)>>
             {
                 let ($($bnames),+, ) = self.builders;
                 let mut output = vec![];
-                iter_builder!(@call f => output ; $($fnames),+ ; $($bnames),+ ;);
-                output.into_iter()
+                iter_builder!(@call output ; $($fnames),+ ; $($bnames),+ ;);
+                output
             }
         }
     }
@@ -401,7 +389,11 @@ mod tests {
         let matrix =
             FixtureMatrix::new().feed(vec![DummyFixture(1), DummyFixture(2), DummyFixture(3)]);
         let matrix = matrix.feed(vec![DummyFixture("Hello"), DummyFixture("World")]);
-        let results = matrix.call(|_, x, s| (*x + 1, *s));
+        let combinations = matrix.flatten();
+        let results = combinations
+            .into_iter()
+            .map(|c| c.call(|_, x, s| (*x + 1, *s)));
+
         let mut iter = results.into_iter();
         assert_eq!(iter.next().unwrap(), (2, "Hello"));
         assert_eq!(iter.next().unwrap(), (2, "World"));
@@ -417,7 +409,10 @@ mod tests {
             FixtureMatrix::new().feed(vec![DummyFixture(1), DummyFixture(2), DummyFixture(3)]);
         let matrix = matrix.feed(vec![DummyFixture("Hello"), DummyFixture("World")]);
         let matrix = matrix.feed(vec![DummyFixture(42)]);
-        let results = matrix.call(|_, x, s, y| (*x + 1, *s, *y));
+        let combinations = matrix.flatten();
+        let results = combinations
+            .into_iter()
+            .map(|c| c.call(|_, x, s, y| (*x + 1, *s, *y)));
         let mut iter = results.into_iter();
         assert_eq!(iter.next().unwrap(), (2, "Hello", 42));
         assert_eq!(iter.next().unwrap(), (2, "World", 42));

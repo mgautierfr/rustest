@@ -87,23 +87,24 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                 // We have to call build a Test per combination of fixtures.
                 // Lets build a fixture_matrix.
                 let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#fixtures_build))*;
+                let combinations = fixtures_matrix.flatten();
 
                 // Append a fixture identifier to test name if we have multiple fixtures instances
-                let test_name = if fixtures_matrix.is_multiple() {
+                let test_name = if combinations.len() > 1 {
                     |name| format!("{}{}", #test_name_str, name)
                 } else {
                     |name| #test_name_str.to_owned()
                 };
 
                 // Lets loop on all the fixture combinations and build a Test for each of them.
-                let tests = fixtures_matrix.call(
+                let tests = combinations.into_iter().map(|c| c.call(
                     move |name, #(#call_args),* | ::rustest::Test::new(
                         test_name(name),
                         #is_xfail,
                         // The test runner is taking no input and and convert output to an error.
                         move || #ident::test(#(#call_args),*).into_error()
                     )
-                )
+                ))
                     .collect::<Vec<_>>();
                 Ok(tests)
             }
