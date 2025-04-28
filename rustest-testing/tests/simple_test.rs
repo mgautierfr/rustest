@@ -129,55 +129,55 @@ fn test_output() {
     dict.check(b"TEST test_param_global_number", 3);
     dict.check(b"TEST test_param_global_number_bis", 3);
     dict.check(
-        b"test test_number                                             ... ok",
+        b"test test_number                                        ... ok",
         1,
     );
     dict.check(
-        b"test test_param_number[ParamNumber:(5,10)]                   ... ok",
+        b"test test_param_number[ParamNumber:5]                   ... ok",
         1,
     );
     dict.check(
-        b"test test_param_number[ParamNumber:(6,12)]                   ... ok",
+        b"test test_param_number[ParamNumber:6]                   ... ok",
         1,
     );
     dict.check(
-        b"test test_param_number[ParamNumber:(42,84)]                  ... ok",
+        b"test test_param_number[ParamNumber:42]                  ... ok",
         1,
     );
     dict.check(
-        b"test test_param_number_bis[ParamNumber:(5,10)]               ... ok",
+        b"test test_param_number_bis[ParamNumber:5]               ... ok",
         1,
     );
     dict.check(
-        b"test test_param_number_bis[ParamNumber:(6,12)]               ... ok",
+        b"test test_param_number_bis[ParamNumber:6]               ... ok",
         1,
     );
     dict.check(
-        b"test test_param_number_bis[ParamNumber:(42,84)]              ... ok",
+        b"test test_param_number_bis[ParamNumber:42]              ... ok",
         1,
     );
     dict.check(
-        b"test test_param_global_number[ParamGlobalNumber:(5,10)]      ... ok",
+        b"test test_param_global_number[ParamGlobalNumber:5]      ... ok",
         1,
     );
     dict.check(
-        b"test test_param_global_number[ParamGlobalNumber:(6,12)]      ... ok",
+        b"test test_param_global_number[ParamGlobalNumber:6]      ... ok",
         1,
     );
     dict.check(
-        b"test test_param_global_number[ParamGlobalNumber:(42,84)]     ... ok",
+        b"test test_param_global_number[ParamGlobalNumber:42]     ... ok",
         1,
     );
     dict.check(
-        b"test test_param_global_number_bis[ParamGlobalNumber:(5,10)]  ... ok",
+        b"test test_param_global_number_bis[ParamGlobalNumber:5]  ... ok",
         1,
     );
     dict.check(
-        b"test test_param_global_number_bis[ParamGlobalNumber:(6,12)]  ... ok",
+        b"test test_param_global_number_bis[ParamGlobalNumber:6]  ... ok",
         1,
     );
     dict.check(
-        b"test test_param_global_number_bis[ParamGlobalNumber:(42,84)] ... ok",
+        b"test test_param_global_number_bis[ParamGlobalNumber:42] ... ok",
         1,
     );
     dict.check_end(TestResult {
@@ -197,13 +197,13 @@ fn test_output_param_only() {
     dict.check(b"BUILD ParamGlobalNumber", 3);
     dict.check(b"TEST test_param_number", 3);
     dict.check(b"TEST test_param_number_bis", 3);
-    dict.check(b"test test_number                                ... ok", 0);
-    dict.check(b"test test_param_number[ParamNumber:(5,10)]      ... ok", 1);
-    dict.check(b"test test_param_number[ParamNumber:(6,12)]      ... ok", 1);
-    dict.check(b"test test_param_number[ParamNumber:(42,84)]     ... ok", 1);
-    dict.check(b"test test_param_number_bis[ParamNumber:(5,10)]  ... ok", 1);
-    dict.check(b"test test_param_number_bis[ParamNumber:(6,12)]  ... ok", 1);
-    dict.check(b"test test_param_number_bis[ParamNumber:(42,84)] ... ok", 1);
+    dict.check(b"test test_number                           ... ok", 0);
+    dict.check(b"test test_param_number[ParamNumber:5]      ... ok", 1);
+    dict.check(b"test test_param_number[ParamNumber:6]      ... ok", 1);
+    dict.check(b"test test_param_number[ParamNumber:42]     ... ok", 1);
+    dict.check(b"test test_param_number_bis[ParamNumber:5]  ... ok", 1);
+    dict.check(b"test test_param_number_bis[ParamNumber:6]  ... ok", 1);
+    dict.check(b"test test_param_number_bis[ParamNumber:42] ... ok", 1);
     dict.check_end(TestResult {
         tested: 6,
         passed: 6,
@@ -228,18 +228,18 @@ BUILD ParamGlobalNumber
 BUILD ParamGlobalNumber
 BUILD ParamGlobalNumber
 test_number: test
-test_param_number[ParamNumber:(5,10)]: test
-test_param_number[ParamNumber:(6,12)]: test
-test_param_number[ParamNumber:(42,84)]: test
-test_param_number_bis[ParamNumber:(5,10)]: test
-test_param_number_bis[ParamNumber:(6,12)]: test
-test_param_number_bis[ParamNumber:(42,84)]: test
-test_param_global_number[ParamGlobalNumber:(5,10)]: test
-test_param_global_number[ParamGlobalNumber:(6,12)]: test
-test_param_global_number[ParamGlobalNumber:(42,84)]: test
-test_param_global_number_bis[ParamGlobalNumber:(5,10)]: test
-test_param_global_number_bis[ParamGlobalNumber:(6,12)]: test
-test_param_global_number_bis[ParamGlobalNumber:(42,84)]: test
+test_param_number[ParamNumber:5]: test
+test_param_number[ParamNumber:6]: test
+test_param_number[ParamNumber:42]: test
+test_param_number_bis[ParamNumber:5]: test
+test_param_number_bis[ParamNumber:6]: test
+test_param_number_bis[ParamNumber:42]: test
+test_param_global_number[ParamGlobalNumber:5]: test
+test_param_global_number[ParamGlobalNumber:6]: test
+test_param_global_number[ParamGlobalNumber:42]: test
+test_param_global_number_bis[ParamGlobalNumber:5]: test
+test_param_global_number_bis[ParamGlobalNumber:6]: test
+test_param_global_number_bis[ParamGlobalNumber:42]: test
 ",
         "{}",
         String::from_utf8_lossy(&output.stdout)

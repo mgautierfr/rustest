@@ -176,12 +176,6 @@ struct FixtureTeardown<T> {
     teardown: Option<Arc<TeardownFn<T>>>,
 }
 
-impl<T: FixtureDisplay> FixtureDisplay for FixtureTeardown<T> {
-    fn display(&self) -> String {
-        self.value.display()
-    }
-}
-
 impl<T> std::ops::Deref for FixtureTeardown<T> {
     type Target = T;
     fn deref(&self) -> &T {
@@ -223,11 +217,5 @@ impl<T> std::ops::Deref for SharedFixtureValue<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl<T: FixtureDisplay> FixtureDisplay for SharedFixtureValue<T> {
-    fn display(&self) -> String {
-        self.0.display()
     }
 }

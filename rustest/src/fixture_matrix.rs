@@ -26,9 +26,9 @@ macro_rules! impl_fixture_combination_call {
                 f: F,
             ) -> Output
                 where
-                F: Fn(String, CallArgs<()>) -> Output,
+                F: Fn(Option<String>, CallArgs<()>) -> Output,
             {
-                f("".into(), CallArgs(()))
+                f(None, CallArgs(()))
             }
         }
     };
@@ -42,7 +42,7 @@ macro_rules! impl_fixture_combination_call {
                 f: F,
             ) -> Output
                 where
-                F: Fn(String, CallArgs<($($types::Fixt),+,)>) -> Output,
+                F: Fn(Option<String>, CallArgs<($($types::Fixt),+,)>) -> Output,
             {
                 let name = self.display();
                 let ($($names),+, ) = self.0;
@@ -140,11 +140,17 @@ macro_rules! impl_fixture_display {
            where
                 $($types : FixtureDisplay),+ ,
         {
-            fn display(&self) -> String {
+            fn display(&self) -> Option<String> {
                 let ($($names),+, ) = &self.0;
                 $(let $names = $names.display();)+
-                let vec = vec![$($names),+];
-                format!("[{}]", vec.join("|"))
+                let mut vec = vec![$($names),+].into_iter().filter_map(|d|d).collect::<Vec<_>>();
+                if vec.is_empty() {
+                    None
+                } else if vec.len() == 1 {
+                    Some(vec.pop().unwrap())
+                } else {
+                    Some(format!("[{}]", vec.join("|")))
+                }
             }
         }
     }
@@ -368,8 +374,8 @@ mod tests {
         }
     }
     impl<T: std::fmt::Display> FixtureDisplay for DummyFixtureBuilder<T> {
-        fn display(&self) -> String {
-            format!("{}", self.0)
+        fn display(&self) -> Option<String> {
+            None
         }
     }
 
@@ -469,8 +475,8 @@ mod tests {
     #[test]
     fn test_builder_combination_display() {
         let combination = BuilderCombination((5, false, "A text"));
-        assert_eq!(combination.display(), "[5|false|A text]");
+        assert_eq!(combination.display(), Some("[5|false|A text]".into()));
         let combination = BuilderCombination((5, false, (Box::new(42), vec![5; 3])));
-        assert_eq!(combination.display(), "[5|false|(42,[5,5,5])]");
+        assert_eq!(combination.display(), Some("[5|false|(42,[5,5,5])]".into()));
     }
 }

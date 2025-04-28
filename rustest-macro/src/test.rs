@@ -68,7 +68,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
     let (fixtures_build, call_args, call_args_input) = gen_fixture_call(&sig)?;
 
-    let param_fixture_def = gen_param_fixture(&params);
+    let param_fixture_def = gen_param_fixture(&params, None);
 
     let test_idx = TEST_COUNT.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
 
@@ -90,7 +90,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
                     // Append a fixture identifier to test name if we have multiple fixtures instances
                     let test_name = if combinations.len() > 1 {
-                        |name| format!("{}{}", #test_name_str, name)
+                        |name: Option<_>| format!("{}[{}]", #test_name_str, name.unwrap())
                     } else {
                         |name| #test_name_str.to_owned()
                     };

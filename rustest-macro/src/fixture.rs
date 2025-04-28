@@ -155,7 +155,6 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
     let builder_name = Ident::new(&format!("__{}Builder", fixture_name), Span::call_site());
     let fixture_generics = &sig.generics;
     let (impl_generics, ty_generics, where_clause) = fixture_generics.split_for_impl();
-    let where_predicate = where_clause.as_ref().map(|wc| &wc.predicates);
     let (fallible, fixture_type) = get_fixture_type(&sig)?;
     let fallible = args.fallible.unwrap_or(fallible);
     let scope = args
@@ -164,7 +163,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         .map(TokenStream::from);
 
     let (sub_fixtures_build, call_args, call_args_input) = gen_fixture_call(&sig)?;
-    let param_fixture_def = gen_param_fixture(&args.params);
+    let param_fixture_def = gen_param_fixture(&args.params, Some(fixture_name));
 
     let convert_result = if fallible {
         quote! {
@@ -208,25 +207,23 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         #[derive(Clone)]
         #vis struct #builder_name #fixture_generics #where_clause {
             inner: #inner_type,
+            name: Option<String>,
             #(#phantom_markers),*
         }
 
         impl #impl_generics #builder_name #ty_generics #where_clause {
-            fn new(inner: #inner_type) -> Self {
+            fn new(inner: #inner_type, name: Option<String>) -> Self {
                 Self {
                     inner,
+                    name,
                     #(#phantom_builders),*
                 }
             }
         }
 
-        impl #impl_generics ::rustest::FixtureDisplay for #builder_name #ty_generics
-        where
-            for<'a> #inner_type: ::rustest::FixtureDisplay,
-            #where_predicate
-        {
-            fn display(&self) -> String {
-                format!("{}:{}", stringify!(#fixture_name), self.inner.display())
+        impl #impl_generics ::rustest::FixtureDisplay for #builder_name #ty_generics #where_clause {
+            fn display(&self) -> Option<String> {
+                self.name.clone()
             }
         }
 
@@ -257,9 +254,9 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                 let builders =  combinations.into_iter().map(|c| {
                     // call do not call the lambda but return a new callable which will call the input builder with
                     // the right fixture combination.
-                    let value = c.call(move | _, #call_args_input | user_provided_setup_as_result(#(#call_args),*))?;
-                    let shared_fixture_value = ::rustest::SharedFixtureValue::new(value, #teardown);
-                    Ok(Self::new(shared_fixture_value))
+                    let (name, value) = c.call(move | name, #call_args_input | (name, user_provided_setup_as_result(#(#call_args),*)));
+                    let shared_fixture_value = ::rustest::SharedFixtureValue::new(value?, #teardown);
+                    Ok(Self::new(shared_fixture_value, name))
                 })
                 .collect::<std::result::Result<Vec<_>, _>>()?;
 

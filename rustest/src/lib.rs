@@ -121,6 +121,7 @@ use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
 pub use fixture::{Fixture, FixtureBuilder, FixtureCreationError, FixtureScope, SubFixture};
+#[doc(hidden)]
 pub use fixture_display::FixtureDisplay;
 pub use fixture_matrix::{CallArgs, FixtureMatrix};
 #[doc(hidden)]

@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Expr, FnArg, Generics, PatType, PathArguments, Signature, Type, TypePath};
+use syn::{Expr, FnArg, Generics, Ident, PatType, PathArguments, Signature, Type, TypePath};
 
 // Generate the fixture call from the function signature.
 // For each argument in the signature, we must :
@@ -47,7 +47,15 @@ pub(crate) fn gen_fixture_call(
     Ok((fixtures_build, call_args, call_args_input))
 }
 
-pub(crate) fn gen_param_fixture(params: &Option<(Type, Expr)>) -> TokenStream {
+pub(crate) fn gen_param_fixture(
+    params: &Option<(Type, Expr)>,
+    fixture_name: Option<&Ident>,
+) -> TokenStream {
+    let display_format = if let Some(i) = fixture_name {
+        format!("{}:{{}}", i)
+    } else {
+        "{}".to_owned()
+    };
     if let Some((param_type, expr)) = params {
         quote! {
             pub struct Param(#param_type);
@@ -62,8 +70,9 @@ pub(crate) fn gen_param_fixture(params: &Option<(Type, Expr)>) -> TokenStream {
 
             impl ::rustest::FixtureDisplay for ParamBuilder
             {
-                fn display(&self) -> String {
-                    self.0.display()
+                fn display(&self) -> Option<String> {
+                    // Param value should always be display
+                    Some(format!(#display_format, self.0.display().unwrap()))
                 }
             }
 

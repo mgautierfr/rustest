@@ -1,7 +1,7 @@
 use core::{assert_eq, sync::atomic::AtomicU32};
 use std::process::Stdio;
 
-use rustest::{FixtureDisplay, Result, SubFixture, fixture, main, test};
+use rustest::{Result, SubFixture, fixture, main, test};
 
 // Tests are simply marked with #[test], as any classic rust integration tests
 #[test]
@@ -138,12 +138,6 @@ fn RunningProcess() -> std::io::Result<Box<ProcessChild>> {
             .arg("while true; do sleep 1; done")
             .spawn()?,
     )))
-}
-
-impl FixtureDisplay for ProcessChild {
-    fn display(&self) -> String {
-        format!("Child pid: {}", self.0.id())
-    }
 }
 
 #[test]
