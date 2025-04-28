@@ -207,7 +207,7 @@ impl<V: std::fmt::Debug, B: std::fmt::Debug> From<BuilderCombination<B>> for Laz
 impl<V: std::fmt::Debug, B: std::fmt::Debug> LazyValue<V, B> {
     pub fn get<F, T>(&mut self, f: F) -> Result<&V, FixtureCreationError>
     where
-        F: Fn(Option<String>, CallArgs<T>) -> Result<V, FixtureCreationError>,
+        F: Fn(CallArgs<T>) -> Result<V, FixtureCreationError>,
         BuilderCombination<B>: BuilderCall<T>,
     {
         if let LazyValue::Builders(b) = self {

@@ -20,7 +20,7 @@ where
 pub trait BuilderCall<Args> {
     fn call<F, Output>(self, f: F) -> Result<Output, FixtureCreationError>
     where
-        F: Fn(Option<String>, CallArgs<Args>) -> Result<Output, FixtureCreationError>;
+        F: FnOnce(CallArgs<Args>) -> Result<Output, FixtureCreationError>;
 }
 
 macro_rules! impl_fixture_combination_call {
@@ -32,9 +32,9 @@ macro_rules! impl_fixture_combination_call {
                 f: F,
             ) -> Result<Output, FixtureCreationError>
                 where
-                F: Fn(Option<String>, CallArgs<()>) -> Result<Output, FixtureCreationError>,
+                F: FnOnce(CallArgs<()>) -> Result<Output, FixtureCreationError>,
             {
-                f(None, CallArgs(()))
+                f(CallArgs(()))
             }
         }
     };
@@ -48,12 +48,11 @@ macro_rules! impl_fixture_combination_call {
                 f: F,
             ) -> Result<Output, FixtureCreationError>
                 where
-                F: Fn(Option<String>, CallArgs<($($types::Fixt),+,)>) -> Result<Output, FixtureCreationError>,
+                F: FnOnce(CallArgs<($($types::Fixt),+,)>) -> Result<Output, FixtureCreationError>,
             {
-                let name = self.display();
                 let ($($names),+, ) = self.0;
                 let call_args = CallArgs(($($names.build()?),+,));
-                f(name, call_args)
+                f(call_args)
             }
         }
     }
@@ -451,7 +450,7 @@ mod tests {
         let combinations = matrix.flatten();
         let results = combinations
             .into_iter()
-            .map(|c| c.call(|_, CallArgs((x, s))| Ok((*x + 1, *s))));
+            .map(|c| c.call(|CallArgs((x, s))| Ok((*x + 1, *s))));
 
         let mut iter = results.into_iter();
         assert_eq!(iter.next().unwrap().unwrap(), (2, "Hello"));
@@ -477,7 +476,7 @@ mod tests {
         let combinations = matrix.flatten();
         let results = combinations
             .into_iter()
-            .map(|c| c.call(|_, CallArgs((x, s, y))| Ok((*x + 1, *s, *y))));
+            .map(|c| c.call(|CallArgs((x, s, y))| Ok((*x + 1, *s, *y))));
         let mut iter = results.into_iter();
         assert_eq!(iter.next().unwrap().unwrap(), (2, "Hello", 42));
         assert_eq!(iter.next().unwrap().unwrap(), (2, "World", 42));

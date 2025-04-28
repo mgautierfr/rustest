@@ -266,7 +266,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                         #convert_result
                     };
                     let inner = self.inner.borrow_mut().get(
-                        move | _, #call_args_input | {
+                        move |#call_args_input| {
                             let value = user_provided_setup_as_result(#(#call_args),*)?;
                             Ok(::rustest::SharedFixtureValue::new(value, #teardown))
                         }
