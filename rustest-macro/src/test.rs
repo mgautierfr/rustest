@@ -66,7 +66,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
     let is_xfail = xfail || is_xfail(&attrs);
 
-    let (fixtures_build, call_args, call_args_input) = gen_fixture_call(&sig)?;
+    let (builder_types, call_args, call_args_input) = gen_fixture_call(&sig)?;
 
     let param_fixture_def = gen_param_fixture(&params, None);
 
@@ -81,11 +81,11 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
                 pub fn #test_generator_ident(ctx: &mut ::rustest::TestContext)
                     -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError> {
-                    use ::rustest::{FixtureBuilder, IntoError};
+                    use ::rustest::{FixtureBuilder, IntoError, BuilderCall};
 
                     // We have to call build a Test per combination of fixtures.
                     // Lets build a fixture_matrix.
-                    let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#fixtures_build))*;
+                    let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#builder_types::setup(ctx)?))*;
                     let combinations = fixtures_matrix.flatten();
 
                     // Append a fixture identifier to test name if we have multiple fixtures instances
@@ -97,14 +97,14 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
                     // Lets loop on all the fixture combinations and build a Test for each of them.
                     let tests = combinations.into_iter().map(|c| c.call(
-                        move |name, #call_args_input | ::rustest::Test::new(
+                        move |name, #call_args_input | Ok(::rustest::Test::new(
                             test_name(name),
                             #is_xfail,
                             // The test runner is taking no input and and convert output to an error.
                             move || #ident::test(#(#call_args),*).into_error()
-                        )
+                        ))
                     ))
-                        .collect::<Vec<_>>();
+                    .collect::<::std::result::Result<Vec<_>, _>>()?;
                     Ok(tests)
                 }
             }

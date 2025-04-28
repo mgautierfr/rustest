@@ -124,6 +124,7 @@ fn test_fixture_inc_number3_2(number3: IncNumber3) {
     assert_eq!(*number3, 3)
 }
 
+#[derive(Debug)]
 struct ProcessChild(pub std::process::Child);
 
 // This fixture is a sub process stucks in a infinite loop.

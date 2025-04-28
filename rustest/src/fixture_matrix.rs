@@ -1,6 +1,6 @@
 use core::{clone::Clone, cmp::PartialEq};
 
-use super::{FixtureBuilder, FixtureDisplay};
+use super::{FixtureBuilder, FixtureCreationError, FixtureDisplay};
 
 #[derive(Clone, Debug)]
 pub struct CallArgs<Types>(pub Types);
@@ -17,16 +17,22 @@ where
     }
 }
 
+pub trait BuilderCall<Args> {
+    fn call<F, Output>(self, f: F) -> Result<Output, FixtureCreationError>
+    where
+        F: Fn(Option<String>, CallArgs<Args>) -> Result<Output, FixtureCreationError>;
+}
+
 macro_rules! impl_fixture_combination_call {
     ((), ()) => {
-        impl BuilderCombination<()> where
+        impl BuilderCall<()> for BuilderCombination<()> where
         {
-            pub fn call<F, Output>(
+            fn call<F, Output>(
                 self,
                 f: F,
-            ) -> Output
+            ) -> Result<Output, FixtureCreationError>
                 where
-                F: Fn(Option<String>, CallArgs<()>) -> Output,
+                F: Fn(Option<String>, CallArgs<()>) -> Result<Output, FixtureCreationError>,
             {
                 f(None, CallArgs(()))
             }
@@ -34,19 +40,19 @@ macro_rules! impl_fixture_combination_call {
     };
     (($($types:tt),+), ($($names:ident),+)) => {
 
-        impl<$($types),+> BuilderCombination<($($types),+,)> where
+        impl<$($types),+> BuilderCall<($($types::Fixt),+,)> for BuilderCombination<($($types),+,)> where
             $($types : FixtureBuilder + 'static),+ ,
         {
-            pub fn call<F, Output>(
+            fn call<F, Output>(
                 self,
                 f: F,
-            ) -> Output
+            ) -> Result<Output, FixtureCreationError>
                 where
-                F: Fn(Option<String>, CallArgs<($($types::Fixt),+,)>) -> Output,
+                F: Fn(Option<String>, CallArgs<($($types::Fixt),+,)>) -> Result<Output, FixtureCreationError>,
             {
                 let name = self.display();
                 let ($($names),+, ) = self.0;
-                let call_args = CallArgs(($($names.build()),+,));
+                let call_args = CallArgs(($($names.build()?),+,));
                 f(name, call_args)
             }
         }
@@ -134,8 +140,15 @@ impl FixtureMatrix<()> {
 }
 
 macro_rules! impl_fixture_display {
+    ((), ()) => {
+        impl FixtureDisplay for BuilderCombination<()>
+        {
+            fn display(&self) -> Option<String> {
+                None
+            }
+        }
+    };
     (($($types:tt),+), ($($names:ident),+)) => {
-
         impl< $($types),+ > FixtureDisplay for BuilderCombination<($($types),+,)>
            where
                 $($types : FixtureDisplay),+ ,
@@ -156,6 +169,7 @@ macro_rules! impl_fixture_display {
     }
 }
 
+impl_fixture_display!((), ());
 impl_fixture_display!((F0), (f0));
 impl_fixture_display!((F0, F1), (f0, f1));
 impl_fixture_display!((F0, F1, F2), (f0, f1, f2));
@@ -333,13 +347,14 @@ mod tests {
         Fixture, FixtureBuilder, FixtureCreationError, FixtureRegistry, FixtureScope, TestContext,
     };
 
+    #[derive(Debug)]
     struct DummyFixture<T>(T);
 
     #[derive(Clone, Debug, PartialEq)]
     struct DummyFixtureBuilder<T>(T);
     impl<T> FixtureBuilder for DummyFixtureBuilder<T>
     where
-        T: Send + Clone + std::fmt::Display + 'static,
+        T: Send + Clone + std::fmt::Display + std::fmt::Debug + 'static,
     {
         type Type = T;
         type InnerType = T;
@@ -351,8 +366,8 @@ mod tests {
             unimplemented!()
         }
 
-        fn build(&self) -> DummyFixture<T> {
-            DummyFixture(self.0.clone())
+        fn build(&self) -> Result<DummyFixture<T>, FixtureCreationError> {
+            Ok(DummyFixture(self.0.clone()))
         }
 
         fn scope() -> FixtureScope {
@@ -362,7 +377,7 @@ mod tests {
 
     impl<T> Fixture for DummyFixture<T>
     where
-        T: Send + Clone + std::fmt::Display + 'static,
+        T: Send + Clone + std::fmt::Display + std::fmt::Debug + 'static,
     {
         type Type = T;
         type Builder = DummyFixtureBuilder<T>;
@@ -436,15 +451,15 @@ mod tests {
         let combinations = matrix.flatten();
         let results = combinations
             .into_iter()
-            .map(|c| c.call(|_, CallArgs((x, s))| (*x + 1, *s)));
+            .map(|c| c.call(|_, CallArgs((x, s))| Ok((*x + 1, *s))));
 
         let mut iter = results.into_iter();
-        assert_eq!(iter.next().unwrap(), (2, "Hello"));
-        assert_eq!(iter.next().unwrap(), (2, "World"));
-        assert_eq!(iter.next().unwrap(), (3, "Hello"));
-        assert_eq!(iter.next().unwrap(), (3, "World"));
-        assert_eq!(iter.next().unwrap(), (4, "Hello"));
-        assert_eq!(iter.next().unwrap(), (4, "World"));
+        assert_eq!(iter.next().unwrap().unwrap(), (2, "Hello"));
+        assert_eq!(iter.next().unwrap().unwrap(), (2, "World"));
+        assert_eq!(iter.next().unwrap().unwrap(), (3, "Hello"));
+        assert_eq!(iter.next().unwrap().unwrap(), (3, "World"));
+        assert_eq!(iter.next().unwrap().unwrap(), (4, "Hello"));
+        assert_eq!(iter.next().unwrap().unwrap(), (4, "World"));
     }
 
     #[test]
@@ -462,14 +477,14 @@ mod tests {
         let combinations = matrix.flatten();
         let results = combinations
             .into_iter()
-            .map(|c| c.call(|_, CallArgs((x, s, y))| (*x + 1, *s, *y)));
+            .map(|c| c.call(|_, CallArgs((x, s, y))| Ok((*x + 1, *s, *y))));
         let mut iter = results.into_iter();
-        assert_eq!(iter.next().unwrap(), (2, "Hello", 42));
-        assert_eq!(iter.next().unwrap(), (2, "World", 42));
-        assert_eq!(iter.next().unwrap(), (3, "Hello", 42));
-        assert_eq!(iter.next().unwrap(), (3, "World", 42));
-        assert_eq!(iter.next().unwrap(), (4, "Hello", 42));
-        assert_eq!(iter.next().unwrap(), (4, "World", 42));
+        assert_eq!(iter.next().unwrap().unwrap(), (2, "Hello", 42));
+        assert_eq!(iter.next().unwrap().unwrap(), (2, "World", 42));
+        assert_eq!(iter.next().unwrap().unwrap(), (3, "Hello", 42));
+        assert_eq!(iter.next().unwrap().unwrap(), (3, "World", 42));
+        assert_eq!(iter.next().unwrap().unwrap(), (4, "Hello", 42));
+        assert_eq!(iter.next().unwrap().unwrap(), (4, "World", 42));
     }
 
     #[test]

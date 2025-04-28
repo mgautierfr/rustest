@@ -6,7 +6,7 @@ use syn::{
     spanned::Spanned,
 };
 
-use crate::utils::{gen_fixture_call, gen_param_fixture};
+use crate::utils::{gen_fixture_call, gen_param_fixture, to_tuple};
 
 #[derive(Debug, PartialEq)]
 enum FixtureScope {
@@ -152,7 +152,8 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
     } = input;
 
     let fixture_name = args.name.as_ref().unwrap_or(&sig.ident);
-    let builder_name = Ident::new(&format!("__{}Builder", fixture_name), Span::call_site());
+    let mod_name = Ident::new(&format!("__{}_mod", fixture_name), Span::call_site());
+    let setup_name = Ident::new(&format!("__{}_setup", fixture_name), Span::call_site());
     let fixture_generics = &sig.generics;
     let (impl_generics, ty_generics, where_clause) = fixture_generics.split_for_impl();
     let (fallible, fixture_type) = get_fixture_type(&sig)?;
@@ -162,7 +163,8 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         .or(Some(FixtureScope::Unique))
         .map(TokenStream::from);
 
-    let (sub_fixtures_build, call_args, call_args_input) = gen_fixture_call(&sig)?;
+    let (sub_builder_types, call_args, call_args_input) = gen_fixture_call(&sig)?;
+    let sub_builder_types_tuple = to_tuple(&sub_builder_types);
     let param_fixture_def = gen_param_fixture(&args.params, Some(fixture_name));
 
     let convert_result = if fallible {
@@ -204,84 +206,89 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
     }
 
     Ok(quote! {
-        #[derive(Clone)]
-        #vis struct #builder_name #fixture_generics #where_clause {
-            inner: #inner_type,
-            name: Option<String>,
-            #(#phantom_markers),*
-        }
+        mod #mod_name {
+            use super::*;
+            #param_fixture_def
 
-        impl #impl_generics #builder_name #ty_generics #where_clause {
-            fn new(inner: #inner_type, name: Option<String>) -> Self {
-                Self {
-                    inner,
-                    name,
-                    #(#phantom_builders),*
-                }
-            }
-        }
+            fn #setup_name #fixture_generics (#sig_inputs) #builder_output #where_clause
+            #block
 
-        impl #impl_generics ::rustest::FixtureDisplay for #builder_name #ty_generics #where_clause {
-            fn display(&self) -> Option<String> {
-                self.name.clone()
-            }
-        }
-
-        impl #impl_generics ::rustest::FixtureBuilder for #builder_name #ty_generics #where_clause {
-            type InnerType = #inner_type;
-            type Type = #fixture_type;
-            type Fixt = #fixture_name #ty_generics;
-            fn setup(ctx: &mut ::rustest::TestContext) -> ::std::result::Result<Vec<Self>, ::rustest::FixtureCreationError> {
-                #param_fixture_def
-
-                if let Some(b) = ctx.get() {
-                    return Ok(b)
-                }
-
-                // This is a lambda which call the initial impl of the fixture and transform the (#fixture_type) into a
-                // `Resutl<#fixture_type, >` if this is not already a `Result`.
-                let user_provided_setup_as_result = |#(#call_args),*| {
-                    let user_provided_setup = |#sig_inputs| #builder_output #block;
-                    let result = user_provided_setup(#(#call_args),*);
-                    #convert_result
-                };
-
-                // We have to call this function for each combination of its fixtures.
-                // Lets build a fixture_matrix.
-                let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_build))*;
-                let combinations = fixtures_matrix.flatten();
-
-                let builders =  combinations.into_iter().map(|c| {
-                    // call do not call the lambda but return a new callable which will call the input builder with
-                    // the right fixture combination.
-                    let (name, value) = c.call(move | name, #call_args_input | (name, user_provided_setup_as_result(#(#call_args),*)));
-                    let shared_fixture_value = ::rustest::SharedFixtureValue::new(value?, #teardown);
-                    Ok(Self::new(shared_fixture_value, name))
-                })
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-
-                ctx.add(builders.clone());
-                Ok(builders)
+            #[derive(Clone, Debug)]
+            pub(super) struct Builder #fixture_generics #where_clause {
+                inner: std::rc::Rc<std::cell::RefCell<::rustest::LazyValue<#inner_type, #sub_builder_types_tuple>>>,
+                name: Option<String>,
+                #(#phantom_markers),*
             }
 
-            fn build(&self) -> Self::Fixt {
-                #fixture_name {
-                    inner: self.inner.clone(),
-                    #(#phantom_builders),*
+            impl #impl_generics Builder #ty_generics #where_clause {
+                fn new(builder: ::rustest::BuilderCombination<#sub_builder_types_tuple>) -> Self {
+                    use ::rustest::FixtureDisplay;
+                    let name = builder.display();
+                    let inner = builder.into();
+                    Self {
+                        inner: std::rc::Rc::new(std::cell::RefCell::new(inner)),
+                        name,
+                        #(#phantom_builders),*
+                    }
                 }
             }
 
-            fn scope() -> ::rustest::FixtureScope { #scope }
-        }
+            impl #impl_generics ::rustest::FixtureDisplay for Builder #ty_generics #where_clause {
+                fn display(&self) -> Option<String> {
+                    self.name.clone()
+                }
+            }
 
-        #[derive(Clone)]
+            impl #impl_generics ::rustest::FixtureBuilder for Builder #ty_generics #where_clause {
+                type InnerType = #inner_type;
+                type Type = #fixture_type;
+                type Fixt = #fixture_name #ty_generics;
+
+                fn setup(ctx: &mut ::rustest::TestContext) -> ::std::result::Result<Vec<Self>, ::rustest::FixtureCreationError> {
+                    if let Some(b) = ctx.get() {
+                        return Ok(b)
+                    }
+
+                    // We have to call this function for each combination of its fixtures.
+                    // Lets build a fixture_matrix.
+                    let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_builder_types::setup(ctx)?))*;
+                    let builders = fixtures_matrix.flatten();
+                    let inners = builders.into_iter().map(|b| Self::new(b)).collect::<Vec<_>>();
+                    ctx.add::<Self>(inners.clone());
+                    Ok(inners)
+                }
+
+                fn build(&self) -> ::std::result::Result<Self::Fixt, ::rustest::FixtureCreationError> {
+                    // This is a lambda which call the initial impl of the fixture and transform the (#fixture_type) into a
+                    // `Resutl<#fixture_type, >` if this is not already a `Result`.
+                    let user_provided_setup_as_result = |#(#call_args),*| {
+                        let result = #setup_name(#(#call_args),*);
+                        #convert_result
+                    };
+                    let inner = self.inner.borrow_mut().get(
+                        move | _, #call_args_input | {
+                            let value = user_provided_setup_as_result(#(#call_args),*)?;
+                            Ok(::rustest::SharedFixtureValue::new(value, #teardown))
+                        }
+                    )?.clone();
+                    Ok(Self::Fixt {
+                        inner,
+                        #(#phantom_builders),*
+                    })
+                }
+
+                fn scope() -> ::rustest::FixtureScope { #scope }
+            }
+        } // end of inner mod
+
+        #[derive(Clone, Debug)]
         #vis struct #fixture_name #fixture_generics #where_clause {
             inner: #inner_type,
             #(#phantom_markers),*
         }
         impl #impl_generics ::rustest::Fixture for #fixture_name #ty_generics #where_clause {
             type Type = #fixture_type;
-            type Builder = #builder_name #ty_generics;
+            type Builder = #mod_name::Builder #ty_generics;
         }
         impl #impl_generics ::rustest::SubFixture for #fixture_name #ty_generics #where_clause {
         }

@@ -2,6 +2,16 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{Expr, FnArg, Generics, Ident, PatType, PathArguments, Signature, Type, TypePath};
 
+pub fn to_tuple(input: &Vec<TokenStream>) -> TokenStream {
+    if input.is_empty() {
+        quote! { () }
+    } else if input.len() == 1 {
+        quote! { (#(#input),*,) }
+    } else {
+        quote! { (#(#input),*) }
+    }
+}
+
 // Generate the fixture call from the function signature.
 // For each argument in the signature, we must :
 // - Build a fixture
@@ -22,12 +32,10 @@ pub(crate) fn gen_fixture_call(
                     let gene = gene.split_for_impl();
                     let turbo_fish = gene.1.as_turbofish();
                     last_segment.arguments = PathArguments::None;
-                    fixtures_build.push(
-                        quote! { <#new_path #turbo_fish as ::rustest::Fixture>::Builder::setup(ctx)? },
-                    );
-                } else {
                     fixtures_build
-                        .push(quote! { <#new_path as ::rustest::Fixture>::Builder::setup(ctx)? });
+                        .push(quote! { <#new_path #turbo_fish as ::rustest::Fixture>::Builder });
+                } else {
+                    fixtures_build.push(quote! { <#new_path as ::rustest::Fixture>::Builder });
                 }
             } else {
                 return Err(syn::Error::new_spanned(ty, "Invalid arg type").to_compile_error());
@@ -37,13 +45,8 @@ pub(crate) fn gen_fixture_call(
         };
         call_args.push(quote! {#pat});
     }
-    let call_args_input = if call_args.is_empty() {
-        quote! { ::rustest::CallArgs(()) }
-    } else if call_args.len() == 1 {
-        quote! { ::rustest::CallArgs((#(#call_args),*,)) }
-    } else {
-        quote! { ::rustest::CallArgs((#(#call_args),*)) }
-    };
+    let call_args_tuple = to_tuple(&call_args);
+    let call_args_input = quote! { ::rustest::CallArgs(#call_args_tuple) };
     Ok((fixtures_build, call_args, call_args_input))
 }
 
@@ -59,7 +62,7 @@ pub(crate) fn gen_param_fixture(
     if let Some((param_type, expr)) = params {
         quote! {
             pub struct Param(#param_type);
-            #[derive(Clone)]
+            #[derive(Clone, Debug)]
             pub struct ParamBuilder(#param_type);
             impl ParamBuilder
             {
@@ -86,8 +89,8 @@ pub(crate) fn gen_param_fixture(
                     Ok(#expr.into_iter().map(|i| Self::new(i)).collect())
                 }
 
-                fn build(&self) -> Self::Fixt {
-                    Param(self.0.clone())
+                fn build(&self) -> std::result::Result<Self::Fixt, ::rustest::FixtureCreationError> {
+                    Ok(Param(self.0.clone()))
                 }
 
                 fn scope() -> ::rustest::FixtureScope { ::rustest::FixtureScope::Test }

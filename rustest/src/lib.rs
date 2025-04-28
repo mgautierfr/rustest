@@ -79,34 +79,34 @@
 //!
 //! #[test]
 //! fn succeed(value: Value) {
-//!     assert_that!(value, eq(2));
+//!     assert_that!(*value, eq(2));
 //! }
 //!
 //! #[test]
 //! #[xfail]
 //! fn fails_and_panics(value: Value) {
-//!     assert_that!(value, eq(4));
+//!     assert_that!(*value, eq(4));
 //! }
 //!
 //! #[test]
 //! #[xfail]
 //! fn two_logged_failures(value: Value) {
-//!     expect_that!(value, eq(4)); // Test now failed, but continues executing.
-//!     expect_that!(value, eq(5)); // Second failure is also logged.
+//!     expect_that!(*value, eq(4)); // Test now failed, but continues executing.
+//!     expect_that!(*value, eq(5)); // Second failure is also logged.
 //! }
 //!
 //! #[test]
 //! #[xfail]
 //! fn fails_immediately_without_panic(value: Value) -> googletest::Result<()> {
-//!     verify_that!(value, eq(4))?; // Test fails and aborts.
-//!     verify_that!(value, eq(2))?; // Never executes.
+//!     verify_that!(*value, eq(4))?; // Test fails and aborts.
+//!     verify_that!(*value, eq(2))?; // Never executes.
 //!     Ok(())
 //! }
 //!
 //! #[test]
 //! #[xfail]
 //! fn simple_assertion(value: Value) -> googletest::Result<()> {
-//!     verify_that!(value, eq(4)) // One can also just return the last assertion.
+//!     verify_that!(*value, eq(4)) // One can also just return the last assertion.
 //! }
 //!
 //! #[rustest::main]
@@ -120,10 +120,12 @@ mod test;
 use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
-pub use fixture::{Fixture, FixtureBuilder, FixtureCreationError, FixtureScope, SubFixture};
+pub use fixture::{
+    Fixture, FixtureBuilder, FixtureCreationError, FixtureScope, LazyValue, SubFixture,
+};
 #[doc(hidden)]
 pub use fixture_display::FixtureDisplay;
-pub use fixture_matrix::{CallArgs, FixtureMatrix};
+pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, FixtureMatrix};
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError};
 pub use test::{Result, Test, TestContext};

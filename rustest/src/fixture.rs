@@ -1,8 +1,9 @@
 use super::TestContext;
-use crate::FixtureDisplay;
+use crate::{BuilderCall, BuilderCombination, CallArgs, FixtureDisplay};
 use core::{
     any::{Any, TypeId},
     clone::Clone,
+    default::Default,
     ops::Deref,
     panic::{RefUnwindSafe, UnwindSafe},
 };
@@ -41,7 +42,7 @@ impl FixtureCreationError {
 ///
 /// This trait is automatically impl by fixtures defined with [macro@crate::fixture] attribute macro.
 /// You should not have to impl it.
-pub trait FixtureBuilder: Clone + FixtureDisplay {
+pub trait FixtureBuilder: std::fmt::Debug + Clone + FixtureDisplay {
     #[doc(hidden)]
     type InnerType;
 
@@ -63,7 +64,7 @@ pub trait FixtureBuilder: Clone + FixtureDisplay {
     where
         Self: Sized;
 
-    fn build(&self) -> Self::Fixt
+    fn build(&self) -> std::result::Result<Self::Fixt, FixtureCreationError>
     where
         Self: Sized;
 
@@ -81,7 +82,7 @@ pub trait Fixture: Deref<Target = Self::Type> {
     type Builder: FixtureBuilder<Fixt = Self>;
 }
 
-pub trait SubFixture: Fixture + Clone + 'static {}
+pub trait SubFixture: Fixture + Clone + std::fmt::Debug + 'static {}
 
 /// Represents the scope of a fixture.
 ///
@@ -191,12 +192,50 @@ impl<T> Drop for FixtureTeardown<T> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum LazyValue<V: std::fmt::Debug, B: std::fmt::Debug> {
+    Value(V),
+    Builders(Option<BuilderCombination<B>>),
+}
+
+impl<V: std::fmt::Debug, B: std::fmt::Debug> From<BuilderCombination<B>> for LazyValue<V, B> {
+    fn from(b: BuilderCombination<B>) -> Self {
+        Self::Builders(Some(b))
+    }
+}
+
+impl<V: std::fmt::Debug, B: std::fmt::Debug> LazyValue<V, B> {
+    pub fn get<F, T>(&mut self, f: F) -> Result<&V, FixtureCreationError>
+    where
+        F: Fn(Option<String>, CallArgs<T>) -> Result<V, FixtureCreationError>,
+        BuilderCombination<B>: BuilderCall<T>,
+    {
+        if let LazyValue::Builders(b) = self {
+            let value = b.take().unwrap().call(f)?;
+            *self = LazyValue::Value(value);
+        };
+
+        match self {
+            LazyValue::Value(v) => Ok(v),
+            LazyValue::Builders(_) => unreachable!(),
+        }
+    }
+}
+
 /// A shared fixture value that manages the teardown of a fixture.
 ///
 /// `SharedFixtureValue` wraps a `FixtureTeardown` in an `Arc` to allow shared ownership.
 #[repr(transparent)]
 #[doc(hidden)]
 pub struct SharedFixtureValue<T>(Arc<FixtureTeardown<T>>);
+
+impl<T: std::fmt::Debug> std::fmt::Debug for SharedFixtureValue<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SharedFixtureValue")
+            .field("v", self.deref())
+            .finish()
+    }
+}
 
 impl<T> SharedFixtureValue<T> {
     pub fn new(value: T, teardown: Option<Arc<TeardownFn<T>>>) -> Self {
