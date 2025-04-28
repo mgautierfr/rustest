@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Expr, Signature, Type};
+use syn::{Expr, FnArg, Generics, PatType, PathArguments, Signature, Type, TypePath};
 
 // Generate the fixture call from the function signature.
 // For each argument in the signature, we must :
@@ -11,10 +11,30 @@ pub(crate) fn gen_fixture_call(
 ) -> Result<(Vec<TokenStream>, Vec<TokenStream>), TokenStream> {
     let mut fixtures_build = vec![];
     let mut call_args = vec![];
-
-    for idx in 0..sig.inputs.len() {
+    for (idx, fnarg) in sig.inputs.iter().enumerate() {
         let pat = &syn::Ident::new(&format!("__fixt_{}", idx), Span::call_site());
-        fixtures_build.push(quote! { ctx.get_fixture()? });
+        if let FnArg::Typed(PatType { ty, .. }) = fnarg {
+            if let Type::Path(TypePath { path, .. }) = ty.as_ref() {
+                let mut new_path = path.clone();
+                let last_segment = new_path.segments.last_mut().unwrap();
+                if let PathArguments::AngleBracketed(g) = &last_segment.arguments {
+                    let gene: Generics = syn::parse_quote! { #g };
+                    let gene = gene.split_for_impl();
+                    let turbo_fish = gene.1.as_turbofish();
+                    last_segment.arguments = PathArguments::None;
+                    fixtures_build.push(
+                        quote! { <#new_path #turbo_fish as ::rustest::Fixture>::Builder::setup(ctx)? },
+                    );
+                } else {
+                    fixtures_build
+                        .push(quote! { <#new_path as ::rustest::Fixture>::Builder::setup(ctx)? });
+                }
+            } else {
+                return Err(syn::Error::new_spanned(ty, "Invalid arg type").to_compile_error());
+            }
+        } else {
+            return Err(syn::Error::new_spanned(fnarg, "Invalid arg type").to_compile_error());
+        };
         call_args.push(quote! {#pat});
     }
     Ok((fixtures_build, call_args))
@@ -23,36 +43,43 @@ pub(crate) fn gen_fixture_call(
 pub(crate) fn gen_param_fixture(params: &Option<(Type, Expr)>) -> TokenStream {
     if let Some((param_type, expr)) = params {
         quote! {
-            #[derive(Clone)]
             pub struct Param(#param_type);
-            impl Param
+            #[derive(Clone)]
+            pub struct ParamBuilder(#param_type);
+            impl ParamBuilder
             {
                 fn new(inner: #param_type) -> Self {
                     Self(inner)
                 }
             }
 
-            impl ::rustest::FixtureDisplay for Param
+            impl ::rustest::FixtureDisplay for ParamBuilder
             {
                 fn display(&self) -> String {
                     self.0.display()
                 }
             }
 
-            impl ::rustest::Fixture for Param
+            impl ::rustest::FixtureBuilder for ParamBuilder
              {
                 type InnerType = #param_type;
                 type Type = #param_type;
+                type Fixt = Param;
 
                 fn setup(ctx: &mut ::rustest::TestContext) -> std::result::Result<Vec<Self>, ::rustest::FixtureCreationError> {
                     Ok(#expr.into_iter().map(|i| Self::new(i)).collect())
                 }
 
-                fn build(&self) -> Self {
-                    self.clone()
+                fn build(&self) -> Self::Fixt {
+                    Param(self.0.clone())
                 }
 
                 fn scope() -> ::rustest::FixtureScope { ::rustest::FixtureScope::Test }
+            }
+
+            impl ::rustest::Fixture for Param {
+                type Type = #param_type;
+                type Builder = ParamBuilder;
             }
 
             impl std::ops::Deref for Param

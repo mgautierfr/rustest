@@ -45,7 +45,9 @@ pub type InnerTestResult = std::result::Result<(), InnerTestError>;
 /// trait.
 pub type LibTestResult = std::result::Result<(), Failed>;
 
-use super::{Fixture, FixtureCreationError, FixtureRegistry, FixtureScope};
+use crate::FixtureBuilder;
+
+use super::{FixtureCreationError, FixtureRegistry, FixtureScope};
 use std::any::Any;
 
 #[doc(hidden)]
@@ -168,7 +170,7 @@ impl<'a> TestContext<'a> {
     }
     pub(crate) fn add<F>(&mut self, value: Vec<F::InnerType>)
     where
-        F: Fixture + 'static,
+        F: FixtureBuilder + 'static,
         F::InnerType: Clone + 'static,
     {
         let reg = match F::scope() {
@@ -181,7 +183,7 @@ impl<'a> TestContext<'a> {
 
     pub(crate) fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
     where
-        F: Fixture + 'static,
+        F: FixtureBuilder + 'static,
         F::InnerType: Clone + 'static,
     {
         let reg = match F::scope() {
@@ -194,7 +196,7 @@ impl<'a> TestContext<'a> {
 
     pub fn get_fixture<Fix>(&mut self) -> std::result::Result<Vec<Fix>, FixtureCreationError>
     where
-        Fix: Fixture + Any,
+        Fix: FixtureBuilder + Any,
     {
         Fix::setup(self)
     }

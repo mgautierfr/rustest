@@ -1,11 +1,11 @@
-use core::{clone::Clone, cmp::PartialEq, panic::UnwindSafe};
+use core::{clone::Clone, cmp::PartialEq};
 
-use super::{Fixture, FixtureDisplay};
+use super::{FixtureBuilder, FixtureDisplay};
 
 #[derive(Clone, Debug)]
-pub struct FixtureCombination<KnownType>(KnownType);
+pub struct BuilderCombination<KnownType>(KnownType);
 
-impl<KnownType> PartialEq<KnownType> for FixtureCombination<KnownType>
+impl<KnownType> PartialEq<KnownType> for BuilderCombination<KnownType>
 where
     KnownType: PartialEq,
 {
@@ -16,7 +16,7 @@ where
 
 macro_rules! impl_fixture_combination_call {
     ((), ()) => {
-        impl FixtureCombination<()> where
+        impl BuilderCombination<()> where
         {
             pub fn call<F, Output>(
                 self,
@@ -31,15 +31,15 @@ macro_rules! impl_fixture_combination_call {
     };
     (($($types:tt),+), ($($names:ident),+)) => {
 
-        impl<$($types),+> FixtureCombination<($($types),+,)> where
-            $($types : Clone + Send + UnwindSafe + Fixture + 'static),+ ,
+        impl<$($types),+> BuilderCombination<($($types),+,)> where
+            $($types : FixtureBuilder + 'static),+ ,
         {
             pub fn call<F, Output>(
                 self,
                 f: F,
             ) -> Output
                 where
-                F: Fn(String, $($types),+) -> Output,
+                F: Fn(String, $($types::Fixt),+) -> Output,
             {
                 let name = self.display();
                 let ($($names),+, ) = self.0;
@@ -124,15 +124,15 @@ impl FixtureMatrix<()> {
     }
 
     /// Call the function f... with no fixture as this FixtureMatrix is dimension 0.
-    pub fn flatten(self) -> Vec<FixtureCombination<()>> {
-        vec![FixtureCombination(())]
+    pub fn flatten(self) -> Vec<BuilderCombination<()>> {
+        vec![BuilderCombination(())]
     }
 }
 
 macro_rules! impl_fixture_display {
     (($($types:tt),+), ($($names:ident),+)) => {
 
-        impl< $($types),+ > FixtureDisplay for FixtureCombination<($($types),+,)>
+        impl< $($types),+ > FixtureDisplay for BuilderCombination<($($types),+,)>
            where
                 $($types : FixtureDisplay),+ ,
         {
@@ -177,13 +177,13 @@ impl_fixture_display!(
 macro_rules! iter_builder {
     (@call $collect:expr ; $last_name:ident ; $last_builder:expr ; ) => {
         for $last_name in $last_builder.iter() {
-            let combination = FixtureCombination(($last_name.clone(), ));
+            let combination = BuilderCombination(($last_name.clone(), ));
             $collect.push(combination)
         }
     };
     (@call $collect:expr ; $last_name:ident ; $last_builder:expr ; $($known:tt),*) => {
         for $last_name in $last_builder.iter() {
-            let combination = FixtureCombination(($($known.clone()),*, $last_name.clone()));
+            let combination = BuilderCombination(($($known.clone()),*, $last_name.clone()));
             $collect.push(combination)
         }
     };
@@ -203,9 +203,9 @@ macro_rules! impl_fixture_call {
     (($($types:tt),+), ($($bnames:ident),+), ($($fnames:ident),+)) => {
 
         impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
-            $($types : Clone + Send + UnwindSafe + FixtureDisplay + 'static),+ ,
+            $($types : Clone + FixtureDisplay + 'static),+ ,
         {
-            pub fn flatten(self) -> Vec<FixtureCombination<($($types),+,)>>
+            pub fn flatten(self) -> Vec<BuilderCombination<($($types),+,)>>
             {
                 let ($($bnames),+, ) = self.builders;
                 let mut output = vec![];
@@ -264,7 +264,7 @@ impl_fixture_call!(
 macro_rules! impl_fixture_feed {
     (($($types:tt),+), ($($names:ident),+)) => {
         impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
-            $($types : Clone + Send + UnwindSafe + FixtureDisplay + 'static),+ ,
+            $($types : FixtureDisplay + 'static),+ ,
         {
 
             /// Feeds new fixtures into the matrix.
@@ -319,16 +319,21 @@ mod tests {
     use core::unimplemented;
 
     use super::*;
-    use crate::{Fixture, FixtureCreationError, FixtureRegistry, FixtureScope, TestContext};
+    use crate::{
+        Fixture, FixtureBuilder, FixtureCreationError, FixtureRegistry, FixtureScope, TestContext,
+    };
+
+    struct DummyFixture<T>(T);
 
     #[derive(Clone, Debug, PartialEq)]
-    struct DummyFixture<T>(T);
-    impl<T> Fixture for DummyFixture<T>
+    struct DummyFixtureBuilder<T>(T);
+    impl<T> FixtureBuilder for DummyFixtureBuilder<T>
     where
-        T: Send + Clone + UnwindSafe + std::fmt::Display + 'static,
+        T: Send + Clone + std::fmt::Display + 'static,
     {
         type Type = T;
         type InnerType = T;
+        type Fixt = DummyFixture<T>;
         fn setup(_ctx: &mut TestContext) -> std::result::Result<Vec<Self>, FixtureCreationError>
         where
             Self: Sized,
@@ -336,13 +341,21 @@ mod tests {
             unimplemented!()
         }
 
-        fn build(&self) -> Self {
-            self.clone()
+        fn build(&self) -> DummyFixture<T> {
+            DummyFixture(self.0.clone())
         }
 
         fn scope() -> FixtureScope {
             FixtureScope::Unique
         }
+    }
+
+    impl<T> Fixture for DummyFixture<T>
+    where
+        T: Send + Clone + std::fmt::Display + 'static,
+    {
+        type Type = T;
+        type Builder = DummyFixtureBuilder<T>;
     }
     impl<T> std::ops::Deref for DummyFixture<T> {
         type Target = T;
@@ -350,7 +363,7 @@ mod tests {
             &self.0
         }
     }
-    impl<T: std::fmt::Display> FixtureDisplay for DummyFixture<T> {
+    impl<T: std::fmt::Display> FixtureDisplay for DummyFixtureBuilder<T> {
         fn display(&self) -> String {
             format!("{}", self.0)
         }
@@ -359,40 +372,57 @@ mod tests {
     #[test]
     fn test_empty_fixture_registry() {
         let mut registry = FixtureRegistry::new();
-        assert!(registry.get::<DummyFixture<i32>>().is_none());
+        assert!(registry.get::<DummyFixtureBuilder<i32>>().is_none());
     }
 
     #[test]
     fn test_fixture_registry() {
         let mut registry = FixtureRegistry::new();
-        registry.add::<DummyFixture<u32>>(vec![1u32, 2u32]);
-        let fixtures = registry.get::<DummyFixture<u32>>().unwrap();
+        registry.add::<DummyFixtureBuilder<u32>>(vec![1u32, 2u32]);
+        let fixtures = registry.get::<DummyFixtureBuilder<u32>>().unwrap();
         assert_eq!(fixtures.len(), 2);
         assert_eq!(fixtures[0], 1);
         assert_eq!(fixtures[1], 2);
-        assert!(registry.get::<DummyFixture<u16>>().is_none());
+        assert!(registry.get::<DummyFixtureBuilder<u16>>().is_none());
     }
 
     #[test]
     fn test_fixture_matrix() {
         let matrix = FixtureMatrix::new()
-            .feed(vec![DummyFixture(1), DummyFixture(2), DummyFixture(3)])
-            .feed(vec![DummyFixture("Hello"), DummyFixture("World")]);
+            .feed(vec![
+                DummyFixtureBuilder(1),
+                DummyFixtureBuilder(2),
+                DummyFixtureBuilder(3),
+            ])
+            .feed(vec![
+                DummyFixtureBuilder("Hello"),
+                DummyFixtureBuilder("World"),
+            ]);
         assert_eq!(
             matrix.builders.0,
-            vec![DummyFixture(1), DummyFixture(2), DummyFixture(3)]
+            vec![
+                DummyFixtureBuilder(1),
+                DummyFixtureBuilder(2),
+                DummyFixtureBuilder(3)
+            ]
         );
         assert_eq!(
             matrix.builders.1,
-            vec![DummyFixture("Hello"), DummyFixture("World")]
+            vec![DummyFixtureBuilder("Hello"), DummyFixtureBuilder("World")]
         );
     }
 
     #[test]
     fn test_matrix_caller() {
-        let matrix =
-            FixtureMatrix::new().feed(vec![DummyFixture(1), DummyFixture(2), DummyFixture(3)]);
-        let matrix = matrix.feed(vec![DummyFixture("Hello"), DummyFixture("World")]);
+        let matrix = FixtureMatrix::new().feed(vec![
+            DummyFixtureBuilder(1),
+            DummyFixtureBuilder(2),
+            DummyFixtureBuilder(3),
+        ]);
+        let matrix = matrix.feed(vec![
+            DummyFixtureBuilder("Hello"),
+            DummyFixtureBuilder("World"),
+        ]);
         let combinations = matrix.flatten();
         let results = combinations
             .into_iter()
@@ -409,10 +439,16 @@ mod tests {
 
     #[test]
     fn test_matrix_caller_dim3() {
-        let matrix =
-            FixtureMatrix::new().feed(vec![DummyFixture(1), DummyFixture(2), DummyFixture(3)]);
-        let matrix = matrix.feed(vec![DummyFixture("Hello"), DummyFixture("World")]);
-        let matrix = matrix.feed(vec![DummyFixture(42)]);
+        let matrix = FixtureMatrix::new().feed(vec![
+            DummyFixtureBuilder(1),
+            DummyFixtureBuilder(2),
+            DummyFixtureBuilder(3),
+        ]);
+        let matrix = matrix.feed(vec![
+            DummyFixtureBuilder("Hello"),
+            DummyFixtureBuilder("World"),
+        ]);
+        let matrix = matrix.feed(vec![DummyFixtureBuilder(42)]);
         let combinations = matrix.flatten();
         let results = combinations
             .into_iter()
@@ -427,10 +463,10 @@ mod tests {
     }
 
     #[test]
-    fn test_fixture_combination_display() {
-        let combination = FixtureCombination((5, false, "A text"));
+    fn test_builder_combination_display() {
+        let combination = BuilderCombination((5, false, "A text"));
         assert_eq!(combination.display(), "[5|false|A text]");
-        let combination = FixtureCombination((5, false, (Box::new(42), vec![5; 3])));
+        let combination = BuilderCombination((5, false, (Box::new(42), vec![5; 3])));
         assert_eq!(combination.display(), "[5|false|(42,[5,5,5])]");
     }
 }

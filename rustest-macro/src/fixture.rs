@@ -152,6 +152,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
     } = input;
 
     let fixture_name = args.name.as_ref().unwrap_or(&sig.ident);
+    let builder_name = Ident::new(&format!("__{}Builder", fixture_name), Span::call_site());
     let fixture_generics = &sig.generics;
     let (impl_generics, ty_generics, where_clause) = fixture_generics.split_for_impl();
     let where_predicate = where_clause.as_ref().map(|wc| &wc.predicates);
@@ -205,12 +206,12 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
 
     Ok(quote! {
         #[derive(Clone)]
-        #vis struct #fixture_name #fixture_generics #where_clause {
+        #vis struct #builder_name #fixture_generics #where_clause {
             inner: #inner_type,
             #(#phantom_markers),*
         }
 
-        impl #impl_generics #fixture_name #ty_generics #where_clause {
+        impl #impl_generics #builder_name #ty_generics #where_clause {
             fn new(inner: #inner_type) -> Self {
                 Self {
                     inner,
@@ -219,7 +220,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             }
         }
 
-        impl #impl_generics ::rustest::FixtureDisplay for #fixture_name #ty_generics
+        impl #impl_generics ::rustest::FixtureDisplay for #builder_name #ty_generics
         where
             for<'a> #inner_type: ::rustest::FixtureDisplay,
             #where_predicate
@@ -229,9 +230,10 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             }
         }
 
-        impl #impl_generics ::rustest::Fixture for #fixture_name #ty_generics #where_clause {
+        impl #impl_generics ::rustest::FixtureBuilder for #builder_name #ty_generics #where_clause {
             type InnerType = #inner_type;
             type Type = #fixture_type;
+            type Fixt = #fixture_name #ty_generics;
             fn setup(ctx: &mut ::rustest::TestContext) -> ::std::result::Result<Vec<Self>, ::rustest::FixtureCreationError> {
                 #param_fixture_def
                 // From InnerType::build, builders must be a function which, when call with a TestContext, returns a Vec of #fixture_type.
@@ -262,11 +264,26 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                 Ok(inners.into_iter().map(|i| Self::new(i)).collect())
             }
 
-            fn build(&self) -> Self {
-                self.clone()
+            fn build(&self) -> Self::Fixt {
+                #fixture_name {
+                    inner: self.inner.clone(),
+                    #(#phantom_builders),*
+                }
             }
 
             fn scope() -> ::rustest::FixtureScope { #scope }
+        }
+
+        #[derive(Clone)]
+        #vis struct #fixture_name #fixture_generics #where_clause {
+            inner: #inner_type,
+            #(#phantom_markers),*
+        }
+        impl #impl_generics ::rustest::Fixture for #fixture_name #ty_generics #where_clause {
+            type Type = #fixture_type;
+            type Builder = #builder_name #ty_generics;
+        }
+        impl #impl_generics ::rustest::SubFixture for #fixture_name #ty_generics #where_clause {
         }
 
         impl #impl_generics ::std::ops::Deref for #fixture_name #ty_generics #where_clause {

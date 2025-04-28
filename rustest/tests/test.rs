@@ -1,7 +1,7 @@
 use core::{assert_eq, sync::atomic::AtomicU32};
 use std::process::Stdio;
 
-use rustest::{Fixture, FixtureDisplay, Result, fixture, main, test};
+use rustest::{FixtureDisplay, Result, SubFixture, fixture, main, test};
 
 // Tests are simply marked with #[test], as any classic rust integration tests
 #[test]
@@ -187,7 +187,7 @@ fn test_double_local(a_number: IncNumberLocal, its_double: DoubleLocal) {
 #[fixture]
 fn DoubleGeneric<Source>(source: Source) -> u32
 where
-    Source: Fixture<Type = u32>,
+    Source: SubFixture<Type = u32>,
 {
     *source * 2
 }

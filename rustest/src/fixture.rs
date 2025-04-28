@@ -41,14 +41,14 @@ impl FixtureCreationError {
 ///
 /// This trait is automatically impl by fixtures defined with [macro@crate::fixture] attribute macro.
 /// You should not have to impl it.
-pub trait Fixture:
-    FixtureDisplay + Deref<Target = Self::Type> + Send + UnwindSafe + Clone + 'static
-{
+pub trait FixtureBuilder: Clone + FixtureDisplay {
     #[doc(hidden)]
     type InnerType;
 
     /// The user type of the fixture.
     type Type;
+
+    type Fixt: Fixture;
 
     /// Sets up the fixture and returns a result containing a vector of fixtures.
     ///
@@ -63,7 +63,7 @@ pub trait Fixture:
     where
         Self: Sized;
 
-    fn build(&self) -> Self
+    fn build(&self) -> Self::Fixt
     where
         Self: Sized;
 
@@ -74,6 +74,14 @@ pub trait Fixture:
     /// The scope of the fixture.
     fn scope() -> FixtureScope;
 }
+
+pub trait Fixture: Deref<Target = Self::Type> {
+    /// The user type of the fixture.
+    type Type;
+    type Builder: FixtureBuilder<Fixt = Self>;
+}
+
+pub trait SubFixture: Fixture + Clone + 'static {}
 
 /// Represents the scope of a fixture.
 ///
@@ -128,7 +136,7 @@ impl FixtureRegistry {
     /// * `F` - The type of the fixture.
     pub(crate) fn add<F>(&mut self, value: Vec<F::InnerType>)
     where
-        F: Fixture + 'static,
+        F: FixtureBuilder + 'static,
         F::InnerType: Clone + 'static,
     {
         self.fixtures.insert(TypeId::of::<F>(), Box::new(value));
@@ -145,7 +153,7 @@ impl FixtureRegistry {
     /// An option containing a vector of the inner type of the fixture, if found.
     pub(crate) fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
     where
-        F: Fixture + 'static,
+        F: FixtureBuilder + 'static,
         F::InnerType: Clone + 'static,
     {
         self.fixtures.get(&TypeId::of::<F>()).map(|a| {
@@ -222,7 +230,7 @@ impl<T: 'static> SharedFixtureValue<T> {
         teardown: Option<Arc<TeardownFn<T>>>,
     ) -> std::result::Result<Vec<Self>, FixtureCreationError>
     where
-        Fx: Fixture<InnerType = Self> + 'static,
+        Fx: FixtureBuilder<InnerType = Self> + 'static,
         Builder: Fn(&mut TestContext) -> std::result::Result<Vec<T>, FixtureCreationError>,
     {
         if let Some(f) = ctx.get::<Fx>() {

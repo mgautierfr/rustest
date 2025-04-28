@@ -120,7 +120,7 @@ mod test;
 use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
-pub use fixture::{Fixture, FixtureCreationError, FixtureScope};
+pub use fixture::{Fixture, FixtureBuilder, FixtureCreationError, FixtureScope, SubFixture};
 pub use fixture_display::FixtureDisplay;
 pub use fixture_matrix::FixtureMatrix;
 #[doc(hidden)]
@@ -370,7 +370,7 @@ pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode 
 /// fn Base2() -> i32 { 2 }
 ///
 /// #[fixture]
-/// fn Double<S: Fixture<Type=i32>> (base: S) -> i32
+/// fn Double<S: SubFixture<Type=i32>> (base: S) -> i32
 /// { 2 * *base }
 ///
 /// #[test]
@@ -395,7 +395,7 @@ pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode 
 /// use rustest::{test ,*};
 ///
 /// # #[fixture]
-/// # fn Double<S: Fixture<Type=i32>> (base: S) -> i32
+/// # fn Double<S: SubFixture<Type=i32>> (base: S) -> i32
 /// # { 2 * *base }
 ///
 /// #[fixture(params:i32=[1,5,2])]
@@ -429,7 +429,7 @@ pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode 
 /// # use rustest::{test ,*};
 /// #
 /// # #[fixture]
-/// # fn Double<S: Fixture<Type=i32>> (base: S) -> i32
+/// # fn Double<S: SubFixture<Type=i32>> (base: S) -> i32
 /// # { 2 * *base }
 /// #
 /// # #[fixture(params:i32=[1,5,2])]
