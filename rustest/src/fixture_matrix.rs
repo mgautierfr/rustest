@@ -3,6 +3,9 @@ use core::{clone::Clone, cmp::PartialEq};
 use super::{FixtureBuilder, FixtureDisplay};
 
 #[derive(Clone, Debug)]
+pub struct CallArgs<Types>(pub Types);
+
+#[derive(Clone, Debug)]
 pub struct BuilderCombination<KnownType>(KnownType);
 
 impl<KnownType> PartialEq<KnownType> for BuilderCombination<KnownType>
@@ -23,9 +26,9 @@ macro_rules! impl_fixture_combination_call {
                 f: F,
             ) -> Output
                 where
-                F: Fn(String) -> Output,
+                F: Fn(String, CallArgs<()>) -> Output,
             {
-                f("".into())
+                f("".into(), CallArgs(()))
             }
         }
     };
@@ -39,11 +42,12 @@ macro_rules! impl_fixture_combination_call {
                 f: F,
             ) -> Output
                 where
-                F: Fn(String, $($types::Fixt),+) -> Output,
+                F: Fn(String, CallArgs<($($types::Fixt),+,)>) -> Output,
             {
                 let name = self.display();
                 let ($($names),+, ) = self.0;
-                f(name, $($names.build()),+)
+                let call_args = CallArgs(($($names.build()),+,));
+                f(name, call_args)
             }
         }
     }
@@ -426,7 +430,7 @@ mod tests {
         let combinations = matrix.flatten();
         let results = combinations
             .into_iter()
-            .map(|c| c.call(|_, x, s| (*x + 1, *s)));
+            .map(|c| c.call(|_, CallArgs((x, s))| (*x + 1, *s)));
 
         let mut iter = results.into_iter();
         assert_eq!(iter.next().unwrap(), (2, "Hello"));
@@ -452,7 +456,7 @@ mod tests {
         let combinations = matrix.flatten();
         let results = combinations
             .into_iter()
-            .map(|c| c.call(|_, x, s, y| (*x + 1, *s, *y)));
+            .map(|c| c.call(|_, CallArgs((x, s, y))| (*x + 1, *s, *y)));
         let mut iter = results.into_iter();
         assert_eq!(iter.next().unwrap(), (2, "Hello", 42));
         assert_eq!(iter.next().unwrap(), (2, "World", 42));

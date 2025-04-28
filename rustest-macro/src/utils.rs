@@ -8,7 +8,7 @@ use syn::{Expr, FnArg, Generics, PatType, PathArguments, Signature, Type, TypePa
 // - Generate the call argument
 pub(crate) fn gen_fixture_call(
     sig: &Signature,
-) -> Result<(Vec<TokenStream>, Vec<TokenStream>), TokenStream> {
+) -> Result<(Vec<TokenStream>, Vec<TokenStream>, TokenStream), TokenStream> {
     let mut fixtures_build = vec![];
     let mut call_args = vec![];
     for (idx, fnarg) in sig.inputs.iter().enumerate() {
@@ -37,7 +37,14 @@ pub(crate) fn gen_fixture_call(
         };
         call_args.push(quote! {#pat});
     }
-    Ok((fixtures_build, call_args))
+    let call_args_input = if call_args.is_empty() {
+        quote! { ::rustest::CallArgs(()) }
+    } else if call_args.len() == 1 {
+        quote! { ::rustest::CallArgs((#(#call_args),*,)) }
+    } else {
+        quote! { ::rustest::CallArgs((#(#call_args),*)) }
+    };
+    Ok((fixtures_build, call_args, call_args_input))
 }
 
 pub(crate) fn gen_param_fixture(params: &Option<(Type, Expr)>) -> TokenStream {

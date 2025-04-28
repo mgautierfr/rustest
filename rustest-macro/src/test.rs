@@ -66,7 +66,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
     let is_xfail = xfail || is_xfail(&attrs);
 
-    let (fixtures_build, call_args) = gen_fixture_call(&sig)?;
+    let (fixtures_build, call_args, call_args_input) = gen_fixture_call(&sig)?;
 
     let param_fixture_def = gen_param_fixture(&params);
 
@@ -97,7 +97,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
                     // Lets loop on all the fixture combinations and build a Test for each of them.
                     let tests = combinations.into_iter().map(|c| c.call(
-                        move |name, #(#call_args),* | ::rustest::Test::new(
+                        move |name, #call_args_input | ::rustest::Test::new(
                             test_name(name),
                             #is_xfail,
                             // The test runner is taking no input and and convert output to an error.

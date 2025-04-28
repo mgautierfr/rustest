@@ -163,7 +163,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         .or(Some(FixtureScope::Unique))
         .map(TokenStream::from);
 
-    let (sub_fixtures_build, call_args) = gen_fixture_call(&sig)?;
+    let (sub_fixtures_build, call_args, call_args_input) = gen_fixture_call(&sig)?;
     let param_fixture_def = gen_param_fixture(&args.params);
 
     let convert_result = if fallible {
@@ -255,7 +255,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                     combinations.into_iter().map(|c|
                         // call do not call the lambda but return a new callable which will call the input builder with
                         // the right fixture combination.
-                        c.call(move | _, #(#call_args),* | user_provided_setup_as_result(#(#call_args),*))
+                        c.call(move | _, #call_args_input | user_provided_setup_as_result(#(#call_args),*))
                     )
                     .collect::<std::result::Result<Vec<_>, _>>()
 

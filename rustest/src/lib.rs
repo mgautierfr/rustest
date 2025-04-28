@@ -122,7 +122,7 @@ use fixture::FixtureRegistry;
 pub use fixture::SharedFixtureValue;
 pub use fixture::{Fixture, FixtureBuilder, FixtureCreationError, FixtureScope, SubFixture};
 pub use fixture_display::FixtureDisplay;
-pub use fixture_matrix::FixtureMatrix;
+pub use fixture_matrix::{CallArgs, FixtureMatrix};
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError};
 pub use test::{Result, Test, TestContext};
