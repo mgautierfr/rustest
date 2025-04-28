@@ -382,11 +382,11 @@ mod tests {
     #[test]
     fn test_fixture_registry() {
         let mut registry = FixtureRegistry::new();
-        registry.add::<DummyFixtureBuilder<u32>>(vec![1u32, 2u32]);
-        let fixtures = registry.get::<DummyFixtureBuilder<u32>>().unwrap();
-        assert_eq!(fixtures.len(), 2);
-        assert_eq!(fixtures[0], 1);
-        assert_eq!(fixtures[1], 2);
+        registry.add(vec![DummyFixtureBuilder(1u32), DummyFixtureBuilder(2u32)]);
+        let builders = registry.get::<DummyFixtureBuilder<u32>>().unwrap();
+        assert_eq!(builders.len(), 2);
+        assert_eq!(builders[0], DummyFixtureBuilder(1));
+        assert_eq!(builders[1], DummyFixtureBuilder(2));
         assert!(registry.get::<DummyFixtureBuilder<u16>>().is_none());
     }
 

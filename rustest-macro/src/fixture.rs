@@ -236,32 +236,35 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             type Fixt = #fixture_name #ty_generics;
             fn setup(ctx: &mut ::rustest::TestContext) -> ::std::result::Result<Vec<Self>, ::rustest::FixtureCreationError> {
                 #param_fixture_def
-                // From InnerType::build, builders must be a function which, when call with a TestContext, returns a Vec of #fixture_type.
-                let builders = |ctx: &mut ::rustest::TestContext| {
 
-                    // This is a lambda which call the initial impl of the fixture and transform the (#fixture_type) into a
-                    // `Resutl<#fixture_type, >` if this is not already a `Result`.
-                    let user_provided_setup_as_result = |#(#call_args),*| {
-                        let user_provided_setup = |#sig_inputs| #builder_output #block;
-                        let result = user_provided_setup(#(#call_args),*);
-                        #convert_result
-                    };
+                if let Some(b) = ctx.get() {
+                    return Ok(b)
+                }
 
-                    // We have to call this function for each combination of its fixtures.
-                    // Lets build a fixture_matrix.
-                    let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_build))*;
-                    let combinations = fixtures_matrix.flatten();
-
-                    combinations.into_iter().map(|c|
-                        // call do not call the lambda but return a new callable which will call the input builder with
-                        // the right fixture combination.
-                        c.call(move | _, #call_args_input | user_provided_setup_as_result(#(#call_args),*))
-                    )
-                    .collect::<std::result::Result<Vec<_>, _>>()
-
+                // This is a lambda which call the initial impl of the fixture and transform the (#fixture_type) into a
+                // `Resutl<#fixture_type, >` if this is not already a `Result`.
+                let user_provided_setup_as_result = |#(#call_args),*| {
+                    let user_provided_setup = |#sig_inputs| #builder_output #block;
+                    let result = user_provided_setup(#(#call_args),*);
+                    #convert_result
                 };
-                let inners = Self::InnerType::build::<Self, _>(ctx, builders, #teardown)?;
-                Ok(inners.into_iter().map(|i| Self::new(i)).collect())
+
+                // We have to call this function for each combination of its fixtures.
+                // Lets build a fixture_matrix.
+                let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_build))*;
+                let combinations = fixtures_matrix.flatten();
+
+                let builders =  combinations.into_iter().map(|c| {
+                    // call do not call the lambda but return a new callable which will call the input builder with
+                    // the right fixture combination.
+                    let value = c.call(move | _, #call_args_input | user_provided_setup_as_result(#(#call_args),*))?;
+                    let shared_fixture_value = ::rustest::SharedFixtureValue::new(value, #teardown);
+                    Ok(Self::new(shared_fixture_value))
+                })
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+
+                ctx.add(builders.clone());
+                Ok(builders)
             }
 
             fn build(&self) -> Self::Fixt {

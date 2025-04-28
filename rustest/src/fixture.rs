@@ -134,12 +134,11 @@ impl FixtureRegistry {
     /// # Type Parameters
     ///
     /// * `F` - The type of the fixture.
-    pub(crate) fn add<F>(&mut self, value: Vec<F::InnerType>)
+    pub(crate) fn add<B>(&mut self, value: Vec<B>)
     where
-        F: FixtureBuilder + 'static,
-        F::InnerType: Clone + 'static,
+        B: FixtureBuilder + 'static,
     {
-        self.fixtures.insert(TypeId::of::<F>(), Box::new(value));
+        self.fixtures.insert(TypeId::of::<B>(), Box::new(value));
     }
 
     /// Retrieves a fixture from the registry.
@@ -151,14 +150,13 @@ impl FixtureRegistry {
     /// # Returns
     ///
     /// An option containing a vector of the inner type of the fixture, if found.
-    pub(crate) fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
+    pub(crate) fn get<B>(&mut self) -> Option<Vec<B>>
     where
-        F: FixtureBuilder + 'static,
-        F::InnerType: Clone + 'static,
+        B: FixtureBuilder + 'static,
     {
-        self.fixtures.get(&TypeId::of::<F>()).map(|a| {
-            let fixture = a.downcast_ref::<Vec<F::InnerType>>().unwrap();
-            fixture.clone()
+        self.fixtures.get(&TypeId::of::<B>()).map(|a| {
+            let builder = a.downcast_ref::<Vec<B>>().unwrap();
+            builder.clone()
         })
     }
 }
@@ -206,48 +204,18 @@ impl<T> Drop for FixtureTeardown<T> {
 #[doc(hidden)]
 pub struct SharedFixtureValue<T>(Arc<FixtureTeardown<T>>);
 
-impl<T> Clone for SharedFixtureValue<T> {
-    fn clone(&self) -> Self {
-        Self(Arc::clone(&self.0))
+impl<T> SharedFixtureValue<T> {
+    pub fn new(value: T, teardown: Option<Arc<TeardownFn<T>>>) -> Self {
+        Self(Arc::new(FixtureTeardown {
+            value,
+            teardown: teardown.clone(),
+        }))
     }
 }
 
-impl<T: 'static> SharedFixtureValue<T> {
-    /// Builds a shared fixture value.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - The test context used for building the fixture.
-    /// * `f` - A builder function that returns a result containing a vector of the inner type.
-    /// * `teardown` - An optional teardown function.
-    ///
-    /// # Returns
-    ///
-    /// A result containing a vector of `SharedFixtureValue` or a `FixtureCreationError`.
-    pub fn build<Fx, Builder>(
-        ctx: &mut TestContext,
-        f: Builder,
-        teardown: Option<Arc<TeardownFn<T>>>,
-    ) -> std::result::Result<Vec<Self>, FixtureCreationError>
-    where
-        Fx: FixtureBuilder<InnerType = Self> + 'static,
-        Builder: Fn(&mut TestContext) -> std::result::Result<Vec<T>, FixtureCreationError>,
-    {
-        if let Some(f) = ctx.get::<Fx>() {
-            return Ok(f);
-        }
-        let values = f(ctx)?
-            .into_iter()
-            .map(|fix| {
-                SharedFixtureValue(Arc::new(FixtureTeardown {
-                    value: fix,
-                    teardown: teardown.clone(),
-                }))
-            })
-            .collect::<Vec<_>>();
-
-        ctx.add::<Fx>(values.clone());
-        Ok(values)
+impl<T> Clone for SharedFixtureValue<T> {
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
     }
 }
 

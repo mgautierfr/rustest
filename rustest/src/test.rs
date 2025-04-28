@@ -168,30 +168,28 @@ impl<'a> TestContext<'a> {
     pub(crate) fn new(global_reg: &'a mut FixtureRegistry, reg: &'a mut FixtureRegistry) -> Self {
         Self { global_reg, reg }
     }
-    pub(crate) fn add<F>(&mut self, value: Vec<F::InnerType>)
+    pub fn add<B>(&mut self, value: Vec<B>)
     where
-        F: FixtureBuilder + 'static,
-        F::InnerType: Clone + 'static,
+        B: FixtureBuilder + 'static,
     {
-        let reg = match F::scope() {
+        let reg = match B::scope() {
             FixtureScope::Test => &mut self.reg,
             FixtureScope::Global => &mut self.global_reg,
             FixtureScope::Unique => return,
         };
-        reg.add::<F>(value)
+        reg.add::<B>(value)
     }
 
-    pub(crate) fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
+    pub fn get<B>(&mut self) -> Option<Vec<B>>
     where
-        F: FixtureBuilder + 'static,
-        F::InnerType: Clone + 'static,
+        B: FixtureBuilder + 'static,
     {
-        let reg = match F::scope() {
+        let reg = match B::scope() {
             FixtureScope::Test => &mut self.reg,
             FixtureScope::Global => &mut self.global_reg,
             FixtureScope::Unique => return None,
         };
-        reg.get::<F>()
+        reg.get::<B>()
     }
 
     pub fn get_fixture<Fix>(&mut self) -> std::result::Result<Vec<Fix>, FixtureCreationError>
