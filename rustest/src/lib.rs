@@ -127,7 +127,7 @@ pub use fixture::{
 pub use fixture_display::FixtureDisplay;
 pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, FixtureMatrix};
 #[doc(hidden)]
-pub use test::{InnerTestResult, IntoError};
+pub use test::{InnerTestResult, IntoError, TestGenerator, TestRunner};
 pub use test::{Result, Test, TestContext};
 
 pub use ctor::declarative::ctor;

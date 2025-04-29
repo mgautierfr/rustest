@@ -97,16 +97,16 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
                     // Lets loop on all the fixture combinations and build a Test for each of them.
                     let tests = combinations.into_iter().map(|c| {
-                        use rustest::FixtureDisplay;
+                        use ::rustest::FixtureDisplay;
                         let name = c.display();
-                        c.call(
-                            move |#call_args_input| Ok(::rustest::Test::new(
-                                test_name(name),
-                                #is_xfail,
-                                // The test runner is taking no input and and convert output to an error.
-                                move || #ident::test(#(#call_args),*).into_error()
-                            ))
-                        )
+                        let runner_gen = Box::new(move || {
+                            c.call(move |#call_args_input| -> std::result::Result<Box<::rustest::TestRunner>, _> {
+                                Ok(
+                                    Box::new(|| #ident::test(#(#call_args),*).into_error()),
+                                )
+                            })
+                        });
+                        Ok(::rustest::Test::new(test_name(name), #is_xfail, runner_gen))
                     })
                     .collect::<::std::result::Result<Vec<_>, _>>()?;
                     Ok(tests)

@@ -80,7 +80,13 @@ impl<T> IntoError for googletest::Result<T> {
 /// An actual test run by rustest
 pub struct Test {
     name: String,
-    runner: Box<dyn FnOnce() -> InnerTestResult + Send + std::panic::UnwindSafe>,
+    runner: Box<
+        dyn FnOnce() -> std::result::Result<
+                Box<dyn FnOnce() -> InnerTestResult + std::panic::UnwindSafe + 'static>,
+                FixtureCreationError,
+            > + Send
+            + 'static,
+    >,
     xfail: bool,
 }
 
@@ -105,21 +111,24 @@ fn collect_gtest(test_result: InnerTestResult) -> InnerTestResult {
     }
 }
 
+pub type TestRunner = dyn FnOnce() -> InnerTestResult + std::panic::UnwindSafe + 'static;
+pub type TestGenerator =
+    dyn FnOnce() -> std::result::Result<Box<TestRunner>, FixtureCreationError> + Send + 'static;
+
 impl Test {
     /// Build a new test.
-    pub fn new<F>(name: impl Into<String>, xfail: bool, runner: F) -> Self
-    where
-        F: FnOnce() -> InnerTestResult + Send + std::panic::UnwindSafe + 'static,
-    {
+    pub fn new(name: impl Into<String>, xfail: bool, runner: Box<TestGenerator>) -> Self {
         Self {
             name: name.into(),
             xfail,
-            runner: Box::new(runner),
+            runner,
         }
     }
     fn run(self) -> LibTestResult {
         setup_gtest();
-        let unwind_result = std::panic::catch_unwind(self.runner);
+        let test_runner = (self.runner)()
+            .map_err(|e| Failed::from(format!("Fixture {} error: {}", e.fixture_name, e.error)))?;
+        let unwind_result = std::panic::catch_unwind(test_runner);
         let test_result = match unwind_result {
             Ok(Ok(())) => Ok(()),
             Ok(Err(e)) => Err(e),

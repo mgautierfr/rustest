@@ -192,9 +192,9 @@ fn test_output_param_only() {
     let output = run(Some(&["test_param_number"])).unwrap();
     let mut dict = TestCollector::collect(output.stdout);
 
-    dict.check(b"BUILD Number", 1);
+    dict.check(b"BUILD Number", 0);
     dict.check(b"BUILD ParamNumber", 6);
-    dict.check(b"BUILD ParamGlobalNumber", 3);
+    dict.check(b"BUILD ParamGlobalNumber", 0);
     dict.check(b"TEST test_param_number", 3);
     dict.check(b"TEST test_param_number_bis", 3);
     dict.check(b"test test_number                           ... ok", 0);
@@ -217,17 +217,7 @@ fn test_output_list() {
     let output = run(Some(&["--list"])).unwrap();
     assert_eq!(
         output.stdout,
-        b"BUILD Number
-BUILD ParamNumber
-BUILD ParamNumber
-BUILD ParamNumber
-BUILD ParamNumber
-BUILD ParamNumber
-BUILD ParamNumber
-BUILD ParamGlobalNumber
-BUILD ParamGlobalNumber
-BUILD ParamGlobalNumber
-test_number: test
+        b"test_number: test
 test_param_number[ParamNumber:5]: test
 test_param_number[ParamNumber:6]: test
 test_param_number[ParamNumber:42]: test

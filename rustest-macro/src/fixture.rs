@@ -215,7 +215,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
 
             #[derive(Clone, Debug)]
             pub(super) struct Builder #fixture_generics #where_clause {
-                inner: std::rc::Rc<std::cell::RefCell<::rustest::LazyValue<#inner_type, #sub_builder_types_tuple>>>,
+                inner: std::sync::Arc<std::sync::Mutex<::rustest::LazyValue<#inner_type, #sub_builder_types_tuple>>>,
                 name: Option<String>,
                 #(#phantom_markers),*
             }
@@ -226,7 +226,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                     let name = builder.display();
                     let inner = builder.into();
                     Self {
-                        inner: std::rc::Rc::new(std::cell::RefCell::new(inner)),
+                        inner: std::sync::Arc::new(std::sync::Mutex::new(inner)),
                         name,
                         #(#phantom_builders),*
                     }
@@ -265,7 +265,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                         let result = #setup_name(#(#call_args),*);
                         #convert_result
                     };
-                    let inner = self.inner.borrow_mut().get(
+                    let inner = self.inner.lock().unwrap().get(
                         move |#call_args_input| {
                             let value = user_provided_setup_as_result(#(#call_args),*)?;
                             Ok(::rustest::SharedFixtureValue::new(value, #teardown))

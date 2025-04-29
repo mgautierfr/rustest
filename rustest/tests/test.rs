@@ -1,5 +1,8 @@
-use core::{assert_eq, sync::atomic::AtomicU32};
-use std::process::Stdio;
+use core::assert_eq;
+use std::{
+    process::Stdio,
+    sync::{Mutex, atomic::AtomicU32},
+};
 
 use rustest::{Result, SubFixture, fixture, main, test};
 
@@ -62,6 +65,7 @@ fn test_fixture_new_number(number: ANewNumber) {
 }
 
 static INC_NUMBER: AtomicU32 = AtomicU32::new(0);
+static SEEN: Mutex<Vec<u32>> = Mutex::new(Vec::new());
 
 // Fixture are setup each time we need it.
 #[fixture]
@@ -70,17 +74,29 @@ fn IncNumber() -> u32 {
 }
 
 // As we use several time the fixture, we have a new number everytime.
+// Fixtures are created as the test is run.
+// As tests are run in parallele, we cannot know which number we will have in each
+// tests.
 #[test]
 fn test_fixture_inc_number_0(number: IncNumber) {
-    assert_eq!(*number, 0)
+    assert!((0..=3).contains(&*number), "{}", *number);
+    let mut seen = SEEN.lock().unwrap();
+    assert!(!seen.contains(&*number));
+    seen.push(*number);
 }
 #[test]
 fn test_fixture_inc_number_1(number: IncNumber) {
-    assert_eq!(*number, 1)
+    assert!((0..=3).contains(&*number), "{}", *number);
+    let mut seen = SEEN.lock().unwrap();
+    assert!(!seen.contains(&*number));
+    seen.push(*number);
 }
 #[test]
 fn test_fixture_inc_number_2(number: IncNumber) {
-    assert_eq!(*number, 2)
+    assert!((0..=3).contains(&*number), "{}", *number);
+    let mut seen = SEEN.lock().unwrap();
+    assert!(!seen.contains(&*number));
+    seen.push(*number);
 }
 
 static INC_NUMBER2: AtomicU32 = AtomicU32::new(0);
@@ -106,22 +122,42 @@ fn test_fixture_inc_number2_2(number: IncNumber2) {
 }
 
 // Fixtures can use other fixtures as source.
+// Fixtures are created as the test is run.
+// As tests are run in parallele, we cannot know which number we will have in each
+// tests.
 #[fixture(scope=global)]
 fn IncNumber3(source: IncNumber) -> u32 {
     *source
 }
 
+static SEEN3: Mutex<Option<u32>> = Mutex::new(None);
+
 #[test]
-fn test_fixture_inc_number3_0(number3: IncNumber3) {
-    assert_eq!(*number3, 3)
+fn test_fixture_inc_number3_0(number: IncNumber3) {
+    assert!((0..=3).contains(&*number), "{}", *number);
+    let mut seen = SEEN3.lock().unwrap();
+    match *seen {
+        Some(n) => assert_eq!(n, *number),
+        None => *seen = Some(*number),
+    }
 }
 #[test]
-fn test_fixture_inc_number3_1(number3: IncNumber3) {
-    assert_eq!(*number3, 3)
+fn test_fixture_inc_number3_1(number: IncNumber3) {
+    assert!((0..=3).contains(&*number), "{}", *number);
+    let mut seen = SEEN3.lock().unwrap();
+    match *seen {
+        Some(n) => assert_eq!(n, *number),
+        None => *seen = Some(*number),
+    }
 }
 #[test]
-fn test_fixture_inc_number3_2(number3: IncNumber3) {
-    assert_eq!(*number3, 3)
+fn test_fixture_inc_number3_2(number: IncNumber3) {
+    assert!((0..=3).contains(&*number), "{}", *number);
+    let mut seen = SEEN3.lock().unwrap();
+    match *seen {
+        Some(n) => assert_eq!(n, *number),
+        None => *seen = Some(*number),
+    }
 }
 
 #[derive(Debug)]
@@ -148,22 +184,30 @@ fn test_with_process(a_process: RunningProcess) -> Result {
     Ok(())
 }
 
+static NEW_INC_NUMBER: AtomicU32 = AtomicU32::new(0);
+
+// Global fixture are setup only once.
+#[fixture]
+fn NewIncNumber() -> u32 {
+    NEW_INC_NUMBER.fetch_add(1, core::sync::atomic::Ordering::Relaxed)
+}
+
 // By default, a new fixtures is created each time we request it.
 // So Double get a new number and returns is double
 #[fixture]
-fn Double(source: IncNumber) -> u32 {
+fn Double(source: NewIncNumber) -> u32 {
     *source * 2
 }
 
-// So Double is the double of a new IncNumber, so (previous incNumber + 1)*2
+// So Double is the double of a new IncNumber
 #[test]
-fn test_double_unique(a_number: IncNumber, its_double: Double) {
-    assert_eq!((*a_number + 1) * 2, *its_double);
+fn test_double_unique(a_number: NewIncNumber, its_double: Double) {
+    assert_ne!(*a_number * 2, *its_double);
 }
 
-// We can for a fixture to be instanciated only once per test
+// We can make a fixture to be instanciated only once per test
 #[fixture(scope=test)]
-fn IncNumberLocal(source: IncNumber) -> u32 {
+fn IncNumberLocal(source: NewIncNumber) -> u32 {
     *source
 }
 #[fixture]
@@ -189,8 +233,8 @@ where
 
 // This is equivalent to test `test_double_unique` but using generic
 #[test]
-fn test_double_unique_gen(a_number: IncNumber, its_double: DoubleGeneric<IncNumber>) {
-    assert_eq!((*a_number + 1) * 2, *its_double);
+fn test_double_unique_gen(a_number: NewIncNumber, its_double: DoubleGeneric<NewIncNumber>) {
+    assert_ne!(*a_number * 2, *its_double);
 }
 
 // This is equivalent to test `test_double_local` but using generic
