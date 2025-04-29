@@ -71,6 +71,8 @@
 //! If feature flag `googletest` is activated, you can use googletest matchers. You don't need to mark you tests with `#[gtest]`.
 //!
 //! ```
+//! # #[cfg(feature = "googletest")]
+//! # mod test {
 //! use googletest::prelude::*;
 //! use rustest::{test, *};
 //!
@@ -108,6 +110,7 @@
 //! fn simple_assertion(value: Value) -> googletest::Result<()> {
 //!     verify_that!(*value, eq(4)) // One can also just return the last assertion.
 //! }
+//! # }
 //!
 //! #[rustest::main]
 //! fn main () {}
