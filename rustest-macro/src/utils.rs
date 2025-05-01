@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{Expr, FnArg, Generics, Ident, PatType, PathArguments, Signature, Type, TypePath};
 
-pub fn to_tuple(input: &Vec<TokenStream>) -> TokenStream {
+pub fn to_tuple(input: &[TokenStream]) -> TokenStream {
     if input.is_empty() {
         quote! { () }
     } else if input.len() == 1 {
@@ -10,6 +10,11 @@ pub fn to_tuple(input: &Vec<TokenStream>) -> TokenStream {
     } else {
         quote! { (#(#input),*) }
     }
+}
+
+pub fn to_call_args(input: &[TokenStream]) -> TokenStream {
+    let tuple = to_tuple(input);
+    quote! { ::rustest::CallArgs(#tuple) }
 }
 
 pub struct FixtureInfo {
@@ -53,8 +58,7 @@ pub(crate) fn gen_fixture_call(sig: &Signature) -> Result<FixtureInfo, TokenStre
         };
         sub_fixtures_inputs.push(quote! {#pat});
     }
-    let sub_fixtures_inputs_tuple = to_tuple(&sub_fixtures_inputs);
-    let sub_fixtures_call_args = quote! { ::rustest::CallArgs(#sub_fixtures_inputs_tuple) };
+    let sub_fixtures_call_args = to_call_args(&sub_fixtures_inputs);
     Ok(FixtureInfo {
         sub_fixtures_builders,
         sub_fixtures,
