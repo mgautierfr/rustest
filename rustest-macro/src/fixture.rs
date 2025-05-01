@@ -6,7 +6,7 @@ use syn::{
     spanned::Spanned,
 };
 
-use crate::utils::{FixtureInfo, gen_fixture_call, gen_param_fixture, to_tuple};
+use crate::utils::{FixtureInfo, gen_fixture_call, gen_param_fixture, to_call_args, to_tuple};
 
 #[derive(Debug, PartialEq)]
 enum FixtureScope {
@@ -168,10 +168,10 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         sub_fixtures_builders,
         sub_fixtures,
         sub_fixtures_inputs,
-        sub_fixtures_call_args,
     } = gen_fixture_call(&sig)?;
     let sub_builder_types_tuple = to_tuple(&sub_fixtures_builders);
     let sub_fixtures_tuple = to_tuple(&sub_fixtures);
+    let sub_fixtures_call_args = to_call_args(&sub_fixtures_inputs);
     let param_fixture_def = gen_param_fixture(&args.params, Some(fixture_name));
 
     let convert_result = if fallible {

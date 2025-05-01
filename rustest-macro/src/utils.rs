@@ -21,7 +21,6 @@ pub struct FixtureInfo {
     pub sub_fixtures_builders: Vec<TokenStream>,
     pub sub_fixtures: Vec<TokenStream>,
     pub sub_fixtures_inputs: Vec<TokenStream>,
-    pub sub_fixtures_call_args: TokenStream,
 }
 
 // Generate the fixture call from the function signature.
@@ -58,12 +57,10 @@ pub(crate) fn gen_fixture_call(sig: &Signature) -> Result<FixtureInfo, TokenStre
         };
         sub_fixtures_inputs.push(quote! {#pat});
     }
-    let sub_fixtures_call_args = to_call_args(&sub_fixtures_inputs);
     Ok(FixtureInfo {
         sub_fixtures_builders,
         sub_fixtures,
         sub_fixtures_inputs,
-        sub_fixtures_call_args,
     })
 }
 

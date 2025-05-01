@@ -4,7 +4,7 @@ use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, ItemFn, LitStr};
 
-use crate::utils::{FixtureInfo, gen_fixture_call, gen_param_fixture};
+use crate::utils::{FixtureInfo, gen_fixture_call, gen_param_fixture, to_call_args};
 
 pub(crate) static TEST_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -69,9 +69,9 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
     let FixtureInfo {
         sub_fixtures_builders,
         sub_fixtures_inputs,
-        sub_fixtures_call_args,
         ..
     } = gen_fixture_call(&sig)?;
+    let sub_fixtures_call_args = to_call_args(&sub_fixtures_inputs);
 
     let param_fixture_def = gen_param_fixture(&params, None);
 
