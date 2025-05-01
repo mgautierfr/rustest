@@ -236,14 +236,14 @@ mod tests {
     fn test_isxfail_empty() {
         let attr: Vec<Attribute> = vec![];
 
-        assert_eq!(is_xfail(&attr), false);
+        assert!(!is_xfail(&attr));
     }
 
     #[test]
     fn test_isxfail_xfail() {
         let attr: Vec<Attribute> = parse_quote! {#[xfail]};
 
-        assert_eq!(is_xfail(&attr), true);
+        assert!(is_xfail(&attr));
     }
 
     #[test]
@@ -253,7 +253,7 @@ mod tests {
             #[other]
         };
 
-        assert_eq!(is_xfail(&attr), true);
+        assert!(is_xfail(&attr));
     }
 
     #[test]
@@ -262,7 +262,7 @@ mod tests {
             #[other]
         };
 
-        assert_eq!(is_xfail(&attr), false);
+        assert!(!is_xfail(&attr));
     }
 
     #[test]

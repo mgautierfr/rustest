@@ -13,7 +13,7 @@ where
     KnownType: PartialEq,
 {
     fn eq(&self, other: &KnownType) -> bool {
-        return self.0.eq(other);
+        self.0.eq(other)
     }
 }
 

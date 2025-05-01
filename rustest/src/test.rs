@@ -6,7 +6,6 @@ use std::error::Error;
 pub type Result = std::result::Result<(), Box<dyn Error>>;
 
 #[doc(hidden)]
-
 pub struct InnerTestError {
     msg: String,
 }
