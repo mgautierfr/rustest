@@ -117,6 +117,7 @@
 //! ```
 
 mod fixture;
+mod fixture_builder;
 mod fixture_display;
 mod fixture_matrix;
 mod test;
@@ -124,8 +125,10 @@ use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
 pub use fixture::{
-    Fixture, FixtureBuilder, FixtureCreationError, FixtureScope, LazyValue, SubFixture,
+    BuildableFixture, Fixture, FixtureBuilder, FixtureCreationError, FixtureScope, LazyValue,
+    SubFixture, TeardownFn,
 };
+pub use fixture_builder::{Builder, FixtureDef};
 #[doc(hidden)]
 pub use fixture_display::FixtureDisplay;
 pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, FixtureMatrix};

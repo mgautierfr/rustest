@@ -43,9 +43,6 @@ impl FixtureCreationError {
 /// This trait is automatically impl by fixtures defined with [macro@crate::fixture] attribute macro.
 /// You should not have to impl it.
 pub trait FixtureBuilder: std::fmt::Debug + Clone + FixtureDisplay {
-    #[doc(hidden)]
-    type InnerType;
-
     /// The user type of the fixture.
     type Type;
 
@@ -78,11 +75,15 @@ pub trait FixtureBuilder: std::fmt::Debug + Clone + FixtureDisplay {
 
 pub trait Fixture: Deref<Target = Self::Type> {
     /// The user type of the fixture.
-    type Type;
+    type Type: std::fmt::Debug;
     type Builder: FixtureBuilder<Fixt = Self>;
 }
 
-pub trait SubFixture: Fixture + Clone + std::fmt::Debug + 'static {}
+pub trait BuildableFixture: Fixture {
+    fn new(v: SharedFixtureValue<Self::Type>) -> Self;
+}
+
+pub trait SubFixture: BuildableFixture + Clone + std::fmt::Debug + 'static {}
 
 /// Represents the scope of a fixture.
 ///
@@ -165,7 +166,7 @@ impl FixtureRegistry {
 /// A type alias for a teardown function.
 ///
 /// The teardown function is called when the fixture is dropped to clean up resources.
-type TeardownFn<T> = dyn Fn(&mut T) + Send + RefUnwindSafe + UnwindSafe + Sync;
+pub type TeardownFn<T> = dyn Fn(&mut T) + Send + RefUnwindSafe + UnwindSafe + Sync;
 
 /// A struct that manages the teardown of a fixture.
 ///

@@ -77,16 +77,14 @@ impl<T> IntoError for googletest::Result<T> {
     }
 }
 
+pub type TestRunner = dyn FnOnce() -> InnerTestResult + std::panic::UnwindSafe + 'static;
+pub type TestGenerator =
+    dyn FnOnce() -> std::result::Result<Box<TestRunner>, FixtureCreationError> + Send + 'static;
+
 /// An actual test run by rustest
 pub struct Test {
     name: String,
-    runner: Box<
-        dyn FnOnce() -> std::result::Result<
-                Box<dyn FnOnce() -> InnerTestResult + std::panic::UnwindSafe + 'static>,
-                FixtureCreationError,
-            > + Send
-            + 'static,
-    >,
+    runner: Box<TestGenerator>,
     xfail: bool,
 }
 
@@ -110,10 +108,6 @@ fn collect_gtest(test_result: InnerTestResult) -> InnerTestResult {
         TestOutcome::close_current_test_outcome(test_result).map_err(|e| e.into())
     }
 }
-
-pub type TestRunner = dyn FnOnce() -> InnerTestResult + std::panic::UnwindSafe + 'static;
-pub type TestGenerator =
-    dyn FnOnce() -> std::result::Result<Box<TestRunner>, FixtureCreationError> + Send + 'static;
 
 impl Test {
     /// Build a new test.

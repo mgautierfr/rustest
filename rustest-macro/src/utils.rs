@@ -12,18 +12,25 @@ pub fn to_tuple(input: &Vec<TokenStream>) -> TokenStream {
     }
 }
 
+pub struct FixtureInfo {
+    pub sub_fixtures_builders: Vec<TokenStream>,
+    pub sub_fixtures: Vec<TokenStream>,
+    pub sub_fixtures_inputs: Vec<TokenStream>,
+    pub sub_fixtures_call_args: TokenStream,
+}
+
 // Generate the fixture call from the function signature.
 // For each argument in the signature, we must :
 // - Build a fixture
 // - Generate the call argument
-pub(crate) fn gen_fixture_call(
-    sig: &Signature,
-) -> Result<(Vec<TokenStream>, Vec<TokenStream>, TokenStream), TokenStream> {
-    let mut fixtures_build = vec![];
-    let mut call_args = vec![];
+pub(crate) fn gen_fixture_call(sig: &Signature) -> Result<FixtureInfo, TokenStream> {
+    let mut sub_fixtures_builders = vec![];
+    let mut sub_fixtures = vec![];
+    let mut sub_fixtures_inputs = vec![];
     for (idx, fnarg) in sig.inputs.iter().enumerate() {
         let pat = &syn::Ident::new(&format!("__fixt_{}", idx), Span::call_site());
         if let FnArg::Typed(PatType { ty, .. }) = fnarg {
+            sub_fixtures.push(quote! { #ty });
             if let Type::Path(TypePath { path, .. }) = ty.as_ref() {
                 let mut new_path = path.clone();
                 let last_segment = new_path.segments.last_mut().unwrap();
@@ -32,10 +39,11 @@ pub(crate) fn gen_fixture_call(
                     let gene = gene.split_for_impl();
                     let turbo_fish = gene.1.as_turbofish();
                     last_segment.arguments = PathArguments::None;
-                    fixtures_build
+                    sub_fixtures_builders
                         .push(quote! { <#new_path #turbo_fish as ::rustest::Fixture>::Builder });
                 } else {
-                    fixtures_build.push(quote! { <#new_path as ::rustest::Fixture>::Builder });
+                    sub_fixtures_builders
+                        .push(quote! { <#new_path as ::rustest::Fixture>::Builder });
                 }
             } else {
                 return Err(syn::Error::new_spanned(ty, "Invalid arg type").to_compile_error());
@@ -43,11 +51,16 @@ pub(crate) fn gen_fixture_call(
         } else {
             return Err(syn::Error::new_spanned(fnarg, "Invalid arg type").to_compile_error());
         };
-        call_args.push(quote! {#pat});
+        sub_fixtures_inputs.push(quote! {#pat});
     }
-    let call_args_tuple = to_tuple(&call_args);
-    let call_args_input = quote! { ::rustest::CallArgs(#call_args_tuple) };
-    Ok((fixtures_build, call_args, call_args_input))
+    let sub_fixtures_inputs_tuple = to_tuple(&sub_fixtures_inputs);
+    let sub_fixtures_call_args = quote! { ::rustest::CallArgs(#sub_fixtures_inputs_tuple) };
+    Ok(FixtureInfo {
+        sub_fixtures_builders,
+        sub_fixtures,
+        sub_fixtures_inputs,
+        sub_fixtures_call_args,
+    })
 }
 
 pub(crate) fn gen_param_fixture(
@@ -61,6 +74,7 @@ pub(crate) fn gen_param_fixture(
     };
     if let Some((param_type, expr)) = params {
         quote! {
+            #[derive(Debug)]
             pub struct Param(#param_type);
             #[derive(Clone, Debug)]
             pub struct ParamBuilder(#param_type);
@@ -81,7 +95,6 @@ pub(crate) fn gen_param_fixture(
 
             impl ::rustest::FixtureBuilder for ParamBuilder
              {
-                type InnerType = #param_type;
                 type Type = #param_type;
                 type Fixt = Param;
 

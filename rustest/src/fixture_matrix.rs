@@ -356,7 +356,6 @@ mod tests {
         T: Send + Clone + std::fmt::Display + std::fmt::Debug + 'static,
     {
         type Type = T;
-        type InnerType = T;
         type Fixt = DummyFixture<T>;
         fn setup(_ctx: &mut TestContext) -> std::result::Result<Vec<Self>, FixtureCreationError>
         where
