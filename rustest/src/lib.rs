@@ -118,9 +118,9 @@
 
 mod fixture;
 mod fixture_builder;
-mod fixture_display;
 mod fixture_matrix;
 mod test;
+mod test_name;
 use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
@@ -129,12 +129,12 @@ pub use fixture::{
     SubFixture, TeardownFn,
 };
 pub use fixture_builder::{Builder, FixtureDef};
-#[doc(hidden)]
-pub use fixture_display::FixtureDisplay;
 pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, FixtureMatrix};
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError, TestGenerator, TestRunner};
 pub use test::{Result, Test, TestContext};
+#[doc(hidden)]
+pub use test_name::TestName;
 
 pub use ctor::declarative::ctor;
 

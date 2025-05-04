@@ -68,7 +68,7 @@ pub(crate) fn gen_param_fixture(
     params: &Option<(Type, Expr)>,
     fixture_name: Option<&Ident>,
 ) -> TokenStream {
-    let display_format = if let Some(i) = fixture_name {
+    let test_name_format = if let Some(i) = fixture_name {
         format!("{}:{{}}", i)
     } else {
         "{}".to_owned()
@@ -86,11 +86,11 @@ pub(crate) fn gen_param_fixture(
                 }
             }
 
-            impl ::rustest::FixtureDisplay for ParamBuilder
+            impl ::rustest::TestName for ParamBuilder
             {
-                fn display(&self) -> Option<String> {
+                fn name(&self) -> Option<String> {
                     // Param value should always be display
-                    Some(format!(#display_format, self.0.display().unwrap()))
+                    Some(format!(#test_name_format, self.0.name().unwrap()))
                 }
             }
 

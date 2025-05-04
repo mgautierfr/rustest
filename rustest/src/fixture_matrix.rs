@@ -1,6 +1,6 @@
 use core::{clone::Clone, cmp::PartialEq};
 
-use super::{FixtureBuilder, FixtureCreationError, FixtureDisplay};
+use super::{FixtureBuilder, FixtureCreationError, TestName};
 
 #[derive(Clone, Debug)]
 pub struct CallArgs<Types>(pub Types);
@@ -138,23 +138,23 @@ impl FixtureMatrix<()> {
     }
 }
 
-macro_rules! impl_fixture_display {
+macro_rules! impl_fixture_test_name {
     ((), ()) => {
-        impl FixtureDisplay for BuilderCombination<()>
+        impl TestName for BuilderCombination<()>
         {
-            fn display(&self) -> Option<String> {
+            fn name(&self) -> Option<String> {
                 None
             }
         }
     };
     (($($types:tt),+), ($($names:ident),+)) => {
-        impl< $($types),+ > FixtureDisplay for BuilderCombination<($($types),+,)>
+        impl< $($types),+ > TestName for BuilderCombination<($($types),+,)>
            where
-                $($types : FixtureDisplay),+ ,
+                $($types : TestName),+ ,
         {
-            fn display(&self) -> Option<String> {
+            fn name(&self) -> Option<String> {
                 let ($($names),+, ) = &self.0;
-                $(let $names = $names.display();)+
+                $(let $names = $names.name();)+
                 let mut vec = vec![$($names),+].into_iter().filter_map(|d|d).collect::<Vec<_>>();
                 if vec.is_empty() {
                     None
@@ -168,31 +168,31 @@ macro_rules! impl_fixture_display {
     }
 }
 
-impl_fixture_display!((), ());
-impl_fixture_display!((F0), (f0));
-impl_fixture_display!((F0, F1), (f0, f1));
-impl_fixture_display!((F0, F1, F2), (f0, f1, f2));
-impl_fixture_display!((F0, F1, F2, F3), (f0, f1, f2, f3));
-impl_fixture_display!((F0, F1, F2, F3, F4), (f0, f1, f2, f3, f4));
-impl_fixture_display!((F0, F1, F2, F3, F4, F5), (f0, f1, f2, f3, f4, f5));
-impl_fixture_display!((F0, F1, F2, F3, F4, F5, F6), (f0, f1, f2, f3, f4, f5, f6));
-impl_fixture_display!(
+impl_fixture_test_name!((), ());
+impl_fixture_test_name!((F0), (f0));
+impl_fixture_test_name!((F0, F1), (f0, f1));
+impl_fixture_test_name!((F0, F1, F2), (f0, f1, f2));
+impl_fixture_test_name!((F0, F1, F2, F3), (f0, f1, f2, f3));
+impl_fixture_test_name!((F0, F1, F2, F3, F4), (f0, f1, f2, f3, f4));
+impl_fixture_test_name!((F0, F1, F2, F3, F4, F5), (f0, f1, f2, f3, f4, f5));
+impl_fixture_test_name!((F0, F1, F2, F3, F4, F5, F6), (f0, f1, f2, f3, f4, f5, f6));
+impl_fixture_test_name!(
     (F0, F1, F2, F3, F4, F5, F6, F7),
     (f0, f1, f2, f3, f4, f5, f6, f7)
 );
-impl_fixture_display!(
+impl_fixture_test_name!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8)
 );
-impl_fixture_display!(
+impl_fixture_test_name!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9)
 );
-impl_fixture_display!(
+impl_fixture_test_name!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10)
 );
-impl_fixture_display!(
+impl_fixture_test_name!(
     (F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11),
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11)
 );
@@ -226,7 +226,7 @@ macro_rules! impl_fixture_call {
     (($($types:tt),+), ($($bnames:ident),+), ($($fnames:ident),+)) => {
 
         impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
-            $($types : Clone + FixtureDisplay + 'static),+ ,
+            $($types : Clone + TestName + 'static),+ ,
         {
             pub fn flatten(self) -> Vec<BuilderCombination<($($types),+,)>>
             {
@@ -287,7 +287,7 @@ impl_fixture_call!(
 macro_rules! impl_fixture_feed {
     (($($types:tt),+), ($($names:ident),+)) => {
         impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
-            $($types : FixtureDisplay + 'static),+ ,
+            $($types : TestName + 'static),+ ,
         {
 
             /// Feeds new fixtures into the matrix.
@@ -339,7 +339,7 @@ impl_fixture_feed!(
 
 #[cfg(test)]
 mod tests {
-    use core::unimplemented;
+    use core::{option::Option::None, unimplemented};
 
     use super::*;
     use crate::{
@@ -386,8 +386,8 @@ mod tests {
             &self.0
         }
     }
-    impl<T: std::fmt::Display> FixtureDisplay for DummyFixtureBuilder<T> {
-        fn display(&self) -> Option<String> {
+    impl<T: std::fmt::Display> TestName for DummyFixtureBuilder<T> {
+        fn name(&self) -> Option<String> {
             None
         }
     }
@@ -486,10 +486,10 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_combination_display() {
+    fn test_builder_combination_test_name() {
         let combination = BuilderCombination((5, false, "A text"));
-        assert_eq!(combination.display(), Some("[5|false|A text]".into()));
+        assert_eq!(combination.name(), Some("[5|false|A text]".into()));
         let combination = BuilderCombination((5, false, (Box::new(42), vec![5; 3])));
-        assert_eq!(combination.display(), Some("[5|false|(42,[5,5,5])]".into()));
+        assert_eq!(combination.name(), Some("[5|false|(42,[5,5,5])]".into()));
     }
 }

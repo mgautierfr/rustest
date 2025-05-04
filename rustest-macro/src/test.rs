@@ -102,8 +102,8 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
                     // Lets loop on all the fixture combinations and build a Test for each of them.
                     let tests = combinations.into_iter().map(|c| {
-                        use ::rustest::FixtureDisplay;
-                        let name = c.display();
+                        use ::rustest::TestName;
+                        let name = c.name();
                         let runner_gen = Box::new(move || {
                             c.call(move |#sub_fixtures_call_args| -> std::result::Result<Box<::rustest::TestRunner>, _> {
                                 Ok(

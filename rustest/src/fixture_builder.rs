@@ -2,7 +2,7 @@ use core::{clone::Clone, marker::PhantomData};
 
 use crate::{
     BuildableFixture, BuilderCall, BuilderCombination, CallArgs, Fixture, FixtureBuilder,
-    FixtureCreationError, FixtureDisplay, FixtureScope, LazyValue, SharedFixtureValue, TeardownFn,
+    FixtureCreationError, FixtureScope, LazyValue, SharedFixtureValue, TeardownFn, TestName,
 };
 use std::sync::{Arc, Mutex};
 
@@ -49,17 +49,17 @@ impl<Def: FixtureDef> std::fmt::Debug for Builder<Def> {
     }
 }
 
-impl<Def: FixtureDef> FixtureDisplay for Builder<Def> {
-    fn display(&self) -> Option<String> {
+impl<Def: FixtureDef> TestName for Builder<Def> {
+    fn name(&self) -> Option<String> {
         self.name.clone()
     }
 }
 impl<Def: FixtureDef> Builder<Def>
 where
-    BuilderCombination<Def::SubBuilders>: FixtureDisplay,
+    BuilderCombination<Def::SubBuilders>: TestName,
 {
     fn new(builder: BuilderCombination<Def::SubBuilders>) -> Self {
-        let name = builder.display();
+        let name = builder.name();
         let inner = builder.into();
         Self {
             inner: Arc::new(Mutex::new(inner)),
@@ -71,7 +71,7 @@ where
 
 impl<Def: FixtureDef + 'static> FixtureBuilder for Builder<Def>
 where
-    BuilderCombination<Def::SubBuilders>: FixtureDisplay + BuilderCall<Def::SubFixtures>,
+    BuilderCombination<Def::SubBuilders>: TestName + BuilderCall<Def::SubFixtures>,
 {
     type Fixt = Def::Fixt;
     type Type = <Def::Fixt as Fixture>::Type;

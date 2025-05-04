@@ -1,5 +1,5 @@
 use super::TestContext;
-use crate::{BuilderCall, BuilderCombination, CallArgs, FixtureDisplay};
+use crate::{BuilderCall, BuilderCombination, CallArgs, TestName};
 use core::{
     any::{Any, TypeId},
     clone::Clone,
@@ -42,7 +42,7 @@ impl FixtureCreationError {
 ///
 /// This trait is automatically impl by fixtures defined with [macro@crate::fixture] attribute macro.
 /// You should not have to impl it.
-pub trait FixtureBuilder: std::fmt::Debug + Clone + FixtureDisplay {
+pub trait FixtureBuilder: std::fmt::Debug + Clone + TestName {
     /// The user type of the fixture.
     type Type;
 
