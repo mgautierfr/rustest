@@ -11,10 +11,11 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+rustest = { path = "../rustest", features = ["googletest"] }
 
 [dev-dependencies]
 googletest = "0.14.0"
-rustest = { path = "../rustest", features = ["googletest"] }
+regex = "1.11.1"
 
 
 [lib]
