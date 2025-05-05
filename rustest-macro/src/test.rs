@@ -4,7 +4,7 @@ use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, ItemFn, LitStr};
 
-use crate::utils::{gen_fixture_call, gen_param_fixture};
+use crate::utils::{FixtureInfo, gen_fixture_call, gen_param_fixture, to_call_args};
 
 pub(crate) static TEST_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -66,9 +66,14 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
     let is_xfail = xfail || is_xfail(&attrs);
 
-    let (fixtures_build, call_args) = gen_fixture_call(&sig)?;
+    let FixtureInfo {
+        sub_fixtures_builders,
+        sub_fixtures_inputs,
+        ..
+    } = gen_fixture_call(&sig)?;
+    let sub_fixtures_call_args = to_call_args(&sub_fixtures_inputs);
 
-    let param_fixture_def = gen_param_fixture(&params);
+    let param_fixture_def = gen_param_fixture(&params, None);
 
     let test_idx = TEST_COUNT.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
 
@@ -78,34 +83,39 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                 use super::*;
                 #param_fixture_def
                 pub(super) #sig #block
-            }
 
-            pub fn #test_generator_ident(ctx: &mut ::rustest::TestContext)
-                -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError> {
-                use ::rustest::IntoError;
+                pub fn #test_generator_ident(ctx: &mut ::rustest::TestContext)
+                    -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError> {
+                    use ::rustest::{FixtureBuilder, IntoError, BuilderCall};
 
-                // We have to call build a Test per combination of fixtures.
-                // Lets build a fixture_matrix.
-                let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#fixtures_build))*;
+                    // We have to call build a Test per combination of fixtures.
+                    // Lets build a fixture_matrix.
+                    let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_builders::setup(ctx)?))*;
+                    let combinations = fixtures_matrix.flatten();
 
-                // Append a fixture identifier to test name if we have multiple fixtures instances
-                let test_name = if fixtures_matrix.is_multiple() {
-                    |name| format!("{}{}", #test_name_str, name)
-                } else {
-                    |name| #test_name_str.to_owned()
-                };
+                    // Append a fixture identifier to test name if we have multiple fixtures instances
+                    let test_name = if combinations.len() > 1 {
+                        |name: Option<_>| format!("{}[{}]", #test_name_str, name.unwrap())
+                    } else {
+                        |name| #test_name_str.to_owned()
+                    };
 
-                // Lets loop on all the fixture combinations and build a Test for each of them.
-                let tests = fixtures_matrix.call(
-                    move |name, #(#call_args),* | ::rustest::Test::new(
-                        test_name(name),
-                        #is_xfail,
-                        // The test runner is taking no input and and convert output to an error.
-                        move || #ident::test(#(#call_args),*).into_error()
-                    )
-                )
-                    .collect::<Vec<_>>();
-                Ok(tests)
+                    // Lets loop on all the fixture combinations and build a Test for each of them.
+                    let tests = combinations.into_iter().map(|c| {
+                        use ::rustest::TestName;
+                        let name = c.name();
+                        let runner_gen = Box::new(move || {
+                            c.call(move |#sub_fixtures_call_args| -> std::result::Result<Box<::rustest::TestRunner>, _> {
+                                Ok(
+                                    Box::new(|| #ident::test(#(#sub_fixtures_inputs),*).into_error()),
+                                )
+                            })
+                        });
+                        Ok(::rustest::Test::new(test_name(name), #is_xfail, runner_gen))
+                    })
+                    .collect::<::std::result::Result<Vec<_>, _>>()?;
+                    Ok(tests)
+                }
             }
 
             ::rustest::ctor! {
@@ -114,7 +124,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                     // SAFETY: ctor are run outside of main, one after the others, so it is safe
                     // to modify it.
                     unsafe {
-                        crate::TEST_GENERATORS[#test_idx] = Some(#test_generator_ident);
+                        crate::TEST_GENERATORS[#test_idx] = Some(#ident::#test_generator_ident);
                     };
                 }
             }
@@ -226,14 +236,14 @@ mod tests {
     fn test_isxfail_empty() {
         let attr: Vec<Attribute> = vec![];
 
-        assert_eq!(is_xfail(&attr), false);
+        assert!(!is_xfail(&attr));
     }
 
     #[test]
     fn test_isxfail_xfail() {
         let attr: Vec<Attribute> = parse_quote! {#[xfail]};
 
-        assert_eq!(is_xfail(&attr), true);
+        assert!(is_xfail(&attr));
     }
 
     #[test]
@@ -243,7 +253,7 @@ mod tests {
             #[other]
         };
 
-        assert_eq!(is_xfail(&attr), true);
+        assert!(is_xfail(&attr));
     }
 
     #[test]
@@ -252,7 +262,7 @@ mod tests {
             #[other]
         };
 
-        assert_eq!(is_xfail(&attr), false);
+        assert!(!is_xfail(&attr));
     }
 
     #[test]

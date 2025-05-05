@@ -1,8 +1,9 @@
 use super::TestContext;
-use crate::FixtureDisplay;
+use crate::{BuilderCall, BuilderCombination, CallArgs, TestName};
 use core::{
     any::{Any, TypeId},
     clone::Clone,
+    default::Default,
     ops::Deref,
     panic::{RefUnwindSafe, UnwindSafe},
 };
@@ -41,14 +42,11 @@ impl FixtureCreationError {
 ///
 /// This trait is automatically impl by fixtures defined with [macro@crate::fixture] attribute macro.
 /// You should not have to impl it.
-pub trait Fixture:
-    FixtureDisplay + Deref<Target = Self::Type> + Send + UnwindSafe + Clone + 'static
-{
-    #[doc(hidden)]
-    type InnerType;
-
+pub trait FixtureBuilder: std::fmt::Debug + Clone + TestName {
     /// The user type of the fixture.
     type Type;
+
+    type Fixt: Fixture;
 
     /// Sets up the fixture and returns a result containing a vector of fixtures.
     ///
@@ -63,6 +61,10 @@ pub trait Fixture:
     where
         Self: Sized;
 
+    fn build(&self) -> std::result::Result<Self::Fixt, FixtureCreationError>
+    where
+        Self: Sized;
+
     /// Returns the scope of the fixture.
     ///
     /// # Returns
@@ -70,6 +72,18 @@ pub trait Fixture:
     /// The scope of the fixture.
     fn scope() -> FixtureScope;
 }
+
+pub trait Fixture: Deref<Target = Self::Type> {
+    /// The user type of the fixture.
+    type Type: std::fmt::Debug;
+    type Builder: FixtureBuilder<Fixt = Self>;
+}
+
+pub trait BuildableFixture: Fixture {
+    fn new(v: SharedFixtureValue<Self::Type>) -> Self;
+}
+
+pub trait SubFixture: BuildableFixture + Clone + std::fmt::Debug + 'static {}
 
 /// Represents the scope of a fixture.
 ///
@@ -122,12 +136,11 @@ impl FixtureRegistry {
     /// # Type Parameters
     ///
     /// * `F` - The type of the fixture.
-    pub(crate) fn add<F>(&mut self, value: Vec<F::InnerType>)
+    pub(crate) fn add<B>(&mut self, value: Vec<B>)
     where
-        F: Fixture + 'static,
-        F::InnerType: Clone + 'static,
+        B: FixtureBuilder + 'static,
     {
-        self.fixtures.insert(TypeId::of::<F>(), Box::new(value));
+        self.fixtures.insert(TypeId::of::<B>(), Box::new(value));
     }
 
     /// Retrieves a fixture from the registry.
@@ -139,14 +152,13 @@ impl FixtureRegistry {
     /// # Returns
     ///
     /// An option containing a vector of the inner type of the fixture, if found.
-    pub(crate) fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
+    pub(crate) fn get<B>(&mut self) -> Option<Vec<B>>
     where
-        F: Fixture + 'static,
-        F::InnerType: Clone + 'static,
+        B: FixtureBuilder + 'static,
     {
-        self.fixtures.get(&TypeId::of::<F>()).map(|a| {
-            let fixture = a.downcast_ref::<Vec<F::InnerType>>().unwrap();
-            fixture.clone()
+        self.fixtures.get(&TypeId::of::<B>()).map(|a| {
+            let builder = a.downcast_ref::<Vec<B>>().unwrap();
+            builder.clone()
         })
     }
 }
@@ -154,7 +166,7 @@ impl FixtureRegistry {
 /// A type alias for a teardown function.
 ///
 /// The teardown function is called when the fixture is dropped to clean up resources.
-type TeardownFn<T> = dyn Fn(&mut T) + Send + RefUnwindSafe + UnwindSafe + Sync;
+pub type TeardownFn<T> = dyn Fn(&mut T) + Send + RefUnwindSafe + UnwindSafe + Sync;
 
 /// A struct that manages the teardown of a fixture.
 ///
@@ -164,12 +176,6 @@ type TeardownFn<T> = dyn Fn(&mut T) + Send + RefUnwindSafe + UnwindSafe + Sync;
 struct FixtureTeardown<T> {
     value: T,
     teardown: Option<Arc<TeardownFn<T>>>,
-}
-
-impl<T: FixtureDisplay> FixtureDisplay for FixtureTeardown<T> {
-    fn display(&self) -> String {
-        self.value.display()
-    }
 }
 
 impl<T> std::ops::Deref for FixtureTeardown<T> {
@@ -187,6 +193,36 @@ impl<T> Drop for FixtureTeardown<T> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum LazyValue<V: std::fmt::Debug, B: std::fmt::Debug> {
+    Value(V),
+    Builders(Option<BuilderCombination<B>>),
+}
+
+impl<V: std::fmt::Debug, B: std::fmt::Debug> From<BuilderCombination<B>> for LazyValue<V, B> {
+    fn from(b: BuilderCombination<B>) -> Self {
+        Self::Builders(Some(b))
+    }
+}
+
+impl<V: std::fmt::Debug, B: std::fmt::Debug> LazyValue<V, B> {
+    pub fn get<F, T>(&mut self, f: F) -> Result<&V, FixtureCreationError>
+    where
+        F: Fn(CallArgs<T>) -> Result<V, FixtureCreationError>,
+        BuilderCombination<B>: BuilderCall<T>,
+    {
+        if let LazyValue::Builders(b) = self {
+            let value = b.take().unwrap().call(f)?;
+            *self = LazyValue::Value(value);
+        };
+
+        match self {
+            LazyValue::Value(v) => Ok(v),
+            LazyValue::Builders(_) => unreachable!(),
+        }
+    }
+}
+
 /// A shared fixture value that manages the teardown of a fixture.
 ///
 /// `SharedFixtureValue` wraps a `FixtureTeardown` in an `Arc` to allow shared ownership.
@@ -194,48 +230,26 @@ impl<T> Drop for FixtureTeardown<T> {
 #[doc(hidden)]
 pub struct SharedFixtureValue<T>(Arc<FixtureTeardown<T>>);
 
-impl<T> Clone for SharedFixtureValue<T> {
-    fn clone(&self) -> Self {
-        Self(Arc::clone(&self.0))
+impl<T: std::fmt::Debug> std::fmt::Debug for SharedFixtureValue<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SharedFixtureValue")
+            .field("v", self.deref())
+            .finish()
     }
 }
 
-impl<T: 'static> SharedFixtureValue<T> {
-    /// Builds a shared fixture value.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - The test context used for building the fixture.
-    /// * `f` - A builder function that returns a result containing a vector of the inner type.
-    /// * `teardown` - An optional teardown function.
-    ///
-    /// # Returns
-    ///
-    /// A result containing a vector of `SharedFixtureValue` or a `FixtureCreationError`.
-    pub fn build<Fx, Builder>(
-        ctx: &mut TestContext,
-        f: Builder,
-        teardown: Option<Arc<TeardownFn<T>>>,
-    ) -> std::result::Result<Vec<Self>, FixtureCreationError>
-    where
-        Fx: Fixture<InnerType = Self> + 'static,
-        Builder: Fn(&mut TestContext) -> std::result::Result<Vec<T>, FixtureCreationError>,
-    {
-        if let Some(f) = ctx.get::<Fx>() {
-            return Ok(f);
-        }
-        let values = f(ctx)?
-            .into_iter()
-            .map(|fix| {
-                SharedFixtureValue(Arc::new(FixtureTeardown {
-                    value: fix,
-                    teardown: teardown.clone(),
-                }))
-            })
-            .collect::<Vec<_>>();
+impl<T> SharedFixtureValue<T> {
+    pub fn new(value: T, teardown: Option<Arc<TeardownFn<T>>>) -> Self {
+        Self(Arc::new(FixtureTeardown {
+            value,
+            teardown: teardown.clone(),
+        }))
+    }
+}
 
-        ctx.add::<Fx>(values.clone());
-        Ok(values)
+impl<T> Clone for SharedFixtureValue<T> {
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
     }
 }
 
@@ -243,11 +257,5 @@ impl<T> std::ops::Deref for SharedFixtureValue<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl<T: FixtureDisplay> FixtureDisplay for SharedFixtureValue<T> {
-    fn display(&self) -> String {
-        self.0.display()
     }
 }

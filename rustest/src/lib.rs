@@ -71,6 +71,8 @@
 //! If feature flag `googletest` is activated, you can use googletest matchers. You don't need to mark you tests with `#[gtest]`.
 //!
 //! ```
+//! # #[cfg(feature = "googletest")]
+//! # mod test {
 //! use googletest::prelude::*;
 //! use rustest::{test, *};
 //!
@@ -79,53 +81,60 @@
 //!
 //! #[test]
 //! fn succeed(value: Value) {
-//!     assert_that!(value, eq(2));
+//!     assert_that!(*value, eq(2));
 //! }
 //!
 //! #[test]
 //! #[xfail]
 //! fn fails_and_panics(value: Value) {
-//!     assert_that!(value, eq(4));
+//!     assert_that!(*value, eq(4));
 //! }
 //!
 //! #[test]
 //! #[xfail]
 //! fn two_logged_failures(value: Value) {
-//!     expect_that!(value, eq(4)); // Test now failed, but continues executing.
-//!     expect_that!(value, eq(5)); // Second failure is also logged.
+//!     expect_that!(*value, eq(4)); // Test now failed, but continues executing.
+//!     expect_that!(*value, eq(5)); // Second failure is also logged.
 //! }
 //!
 //! #[test]
 //! #[xfail]
 //! fn fails_immediately_without_panic(value: Value) -> googletest::Result<()> {
-//!     verify_that!(value, eq(4))?; // Test fails and aborts.
-//!     verify_that!(value, eq(2))?; // Never executes.
+//!     verify_that!(*value, eq(4))?; // Test fails and aborts.
+//!     verify_that!(*value, eq(2))?; // Never executes.
 //!     Ok(())
 //! }
 //!
 //! #[test]
 //! #[xfail]
 //! fn simple_assertion(value: Value) -> googletest::Result<()> {
-//!     verify_that!(value, eq(4)) // One can also just return the last assertion.
+//!     verify_that!(*value, eq(4)) // One can also just return the last assertion.
 //! }
+//! # }
 //!
 //! #[rustest::main]
 //! fn main () {}
 //! ```
 
 mod fixture;
-mod fixture_display;
+mod fixture_builder;
 mod fixture_matrix;
 mod test;
+mod test_name;
 use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
-pub use fixture::{Fixture, FixtureCreationError, FixtureScope};
-pub use fixture_display::FixtureDisplay;
-pub use fixture_matrix::FixtureMatrix;
+pub use fixture::{
+    BuildableFixture, Fixture, FixtureBuilder, FixtureCreationError, FixtureScope, LazyValue,
+    SubFixture, TeardownFn,
+};
+pub use fixture_builder::{Builder, FixtureDef};
+pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, FixtureMatrix};
 #[doc(hidden)]
-pub use test::{InnerTestResult, IntoError};
+pub use test::{InnerTestResult, IntoError, TestGenerator, TestRunner};
 pub use test::{Result, Test, TestContext};
+#[doc(hidden)]
+pub use test_name::TestName;
 
 pub use ctor::declarative::ctor;
 
@@ -370,7 +379,7 @@ pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode 
 /// fn Base2() -> i32 { 2 }
 ///
 /// #[fixture]
-/// fn Double<S: Fixture<Type=i32>> (base: S) -> i32
+/// fn Double<S: SubFixture<Type=i32>> (base: S) -> i32
 /// { 2 * *base }
 ///
 /// #[test]
@@ -395,7 +404,7 @@ pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode 
 /// use rustest::{test ,*};
 ///
 /// # #[fixture]
-/// # fn Double<S: Fixture<Type=i32>> (base: S) -> i32
+/// # fn Double<S: SubFixture<Type=i32>> (base: S) -> i32
 /// # { 2 * *base }
 ///
 /// #[fixture(params:i32=[1,5,2])]
@@ -429,7 +438,7 @@ pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode 
 /// # use rustest::{test ,*};
 /// #
 /// # #[fixture]
-/// # fn Double<S: Fixture<Type=i32>> (base: S) -> i32
+/// # fn Double<S: SubFixture<Type=i32>> (base: S) -> i32
 /// # { 2 * *base }
 /// #
 /// # #[fixture(params:i32=[1,5,2])]

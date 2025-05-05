@@ -6,7 +6,6 @@ use std::error::Error;
 pub type Result = std::result::Result<(), Box<dyn Error>>;
 
 #[doc(hidden)]
-
 pub struct InnerTestError {
     msg: String,
 }
@@ -45,7 +44,9 @@ pub type InnerTestResult = std::result::Result<(), InnerTestError>;
 /// trait.
 pub type LibTestResult = std::result::Result<(), Failed>;
 
-use super::{Fixture, FixtureCreationError, FixtureRegistry, FixtureScope};
+use crate::FixtureBuilder;
+
+use super::{FixtureCreationError, FixtureRegistry, FixtureScope};
 use std::any::Any;
 
 #[doc(hidden)]
@@ -75,10 +76,14 @@ impl<T> IntoError for googletest::Result<T> {
     }
 }
 
+pub type TestRunner = dyn FnOnce() -> InnerTestResult + std::panic::UnwindSafe + 'static;
+pub type TestGenerator =
+    dyn FnOnce() -> std::result::Result<Box<TestRunner>, FixtureCreationError> + Send + 'static;
+
 /// An actual test run by rustest
 pub struct Test {
     name: String,
-    runner: Box<dyn FnOnce() -> InnerTestResult + Send + std::panic::UnwindSafe>,
+    runner: Box<TestGenerator>,
     xfail: bool,
 }
 
@@ -105,19 +110,18 @@ fn collect_gtest(test_result: InnerTestResult) -> InnerTestResult {
 
 impl Test {
     /// Build a new test.
-    pub fn new<F>(name: impl Into<String>, xfail: bool, runner: F) -> Self
-    where
-        F: FnOnce() -> InnerTestResult + Send + std::panic::UnwindSafe + 'static,
-    {
+    pub fn new(name: impl Into<String>, xfail: bool, runner: Box<TestGenerator>) -> Self {
         Self {
             name: name.into(),
             xfail,
-            runner: Box::new(runner),
+            runner,
         }
     }
     fn run(self) -> LibTestResult {
         setup_gtest();
-        let unwind_result = std::panic::catch_unwind(self.runner);
+        let test_runner = (self.runner)()
+            .map_err(|e| Failed::from(format!("Fixture {} error: {}", e.fixture_name, e.error)))?;
+        let unwind_result = std::panic::catch_unwind(test_runner);
         let test_result = match unwind_result {
             Ok(Ok(())) => Ok(()),
             Ok(Err(e)) => Err(e),
@@ -166,35 +170,33 @@ impl<'a> TestContext<'a> {
     pub(crate) fn new(global_reg: &'a mut FixtureRegistry, reg: &'a mut FixtureRegistry) -> Self {
         Self { global_reg, reg }
     }
-    pub(crate) fn add<F>(&mut self, value: Vec<F::InnerType>)
+    pub fn add<B>(&mut self, value: Vec<B>)
     where
-        F: Fixture + 'static,
-        F::InnerType: Clone + 'static,
+        B: FixtureBuilder + 'static,
     {
-        let reg = match F::scope() {
+        let reg = match B::scope() {
             FixtureScope::Test => &mut self.reg,
             FixtureScope::Global => &mut self.global_reg,
             FixtureScope::Unique => return,
         };
-        reg.add::<F>(value)
+        reg.add::<B>(value)
     }
 
-    pub(crate) fn get<F>(&mut self) -> Option<Vec<F::InnerType>>
+    pub fn get<B>(&mut self) -> Option<Vec<B>>
     where
-        F: Fixture + 'static,
-        F::InnerType: Clone + 'static,
+        B: FixtureBuilder + 'static,
     {
-        let reg = match F::scope() {
+        let reg = match B::scope() {
             FixtureScope::Test => &mut self.reg,
             FixtureScope::Global => &mut self.global_reg,
             FixtureScope::Unique => return None,
         };
-        reg.get::<F>()
+        reg.get::<B>()
     }
 
     pub fn get_fixture<Fix>(&mut self) -> std::result::Result<Vec<Fix>, FixtureCreationError>
     where
-        Fix: Fixture + Any,
+        Fix: FixtureBuilder + Any,
     {
         Fix::setup(self)
     }
