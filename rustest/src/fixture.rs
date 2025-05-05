@@ -48,6 +48,8 @@ pub trait FixtureBuilder: std::fmt::Debug + Clone + TestName {
 
     type Fixt: Fixture;
 
+    const SCOPE: FixtureScope;
+
     /// Sets up the fixture and returns a result containing a vector of fixtures.
     ///
     /// # Arguments
@@ -64,13 +66,6 @@ pub trait FixtureBuilder: std::fmt::Debug + Clone + TestName {
     fn build(&self) -> std::result::Result<Self::Fixt, FixtureCreationError>
     where
         Self: Sized;
-
-    /// Returns the scope of the fixture.
-    ///
-    /// # Returns
-    ///
-    /// The scope of the fixture.
-    fn scope() -> FixtureScope;
 }
 
 pub trait Fixture: Deref<Target = Self::Type> {

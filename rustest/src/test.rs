@@ -174,7 +174,7 @@ impl<'a> TestContext<'a> {
     where
         B: FixtureBuilder + 'static,
     {
-        let reg = match B::scope() {
+        let reg = match B::SCOPE {
             FixtureScope::Test => &mut self.reg,
             FixtureScope::Global => &mut self.global_reg,
             FixtureScope::Unique => return,
@@ -186,7 +186,7 @@ impl<'a> TestContext<'a> {
     where
         B: FixtureBuilder + 'static,
     {
-        let reg = match B::scope() {
+        let reg = match B::SCOPE {
             FixtureScope::Test => &mut self.reg,
             FixtureScope::Global => &mut self.global_reg,
             FixtureScope::Unique => return None,

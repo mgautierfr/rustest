@@ -75,6 +75,7 @@ where
 {
     type Fixt = Def::Fixt;
     type Type = <Def::Fixt as Fixture>::Type;
+    const SCOPE: FixtureScope = Def::SCOPE;
 
     fn setup(
         ctx: &mut crate::TestContext,
@@ -106,9 +107,5 @@ where
             })?
             .clone();
         Ok(Self::Fixt::new(inner))
-    }
-
-    fn scope() -> crate::FixtureScope {
-        Def::SCOPE
     }
 }
