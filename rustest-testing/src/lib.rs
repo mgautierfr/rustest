@@ -1,4 +1,5 @@
 mod other_mod;
+mod sub_module_fixture;
 
 pub use other_mod::*;
 
