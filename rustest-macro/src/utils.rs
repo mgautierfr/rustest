@@ -27,16 +27,24 @@ pub struct FixtureInfo {
 // For each argument in the signature, we must :
 // - Build a fixture
 // - Generate the call argument
-pub(crate) fn gen_fixture_call(sig: &Signature) -> Result<FixtureInfo, TokenStream> {
+pub(crate) fn gen_fixture_call(
+    sig: &Signature,
+    mod_name: Option<&Ident>,
+) -> Result<FixtureInfo, TokenStream> {
     let mut sub_fixtures_builders = vec![];
     let mut sub_fixtures = vec![];
     let mut sub_fixtures_inputs = vec![];
     for (idx, fnarg) in sig.inputs.iter().enumerate() {
         let pat = &syn::Ident::new(&format!("__fixt_{}", idx), Span::call_site());
         if let FnArg::Typed(PatType { ty, .. }) = fnarg {
-            sub_fixtures.push(quote! { #ty });
             if let Type::Path(TypePath { path, .. }) = ty.as_ref() {
-                let mut new_path = path.clone();
+                let mut new_path = if path.is_ident("Param") && mod_name.is_some() {
+                    sub_fixtures.push(quote! { #mod_name::#ty });
+                    syn::parse_quote!( #mod_name::#ty)
+                } else {
+                    sub_fixtures.push(quote! { #ty });
+                    path.clone()
+                };
                 let last_segment = new_path.segments.last_mut().unwrap();
                 if let PathArguments::AngleBracketed(g) = &last_segment.arguments {
                     let gene: Generics = syn::parse_quote! { #g };
@@ -76,7 +84,7 @@ pub(crate) fn gen_param_fixture(
     if let Some((param_type, expr)) = params {
         quote! {
             #[derive(Debug)]
-            pub struct Param(#param_type);
+            pub struct Param(pub #param_type);
             #[derive(Clone, Debug)]
             pub struct ParamBuilder(#param_type);
             impl ParamBuilder

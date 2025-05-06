@@ -70,7 +70,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
         sub_fixtures_builders,
         sub_fixtures_inputs,
         ..
-    } = gen_fixture_call(&sig)?;
+    } = gen_fixture_call(&sig, None)?;
     let sub_fixtures_call_args = to_call_args(&sub_fixtures_inputs);
 
     let param_fixture_def = gen_param_fixture(&params, None);
