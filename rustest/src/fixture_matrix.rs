@@ -357,6 +357,8 @@ mod tests {
     {
         type Type = T;
         type Fixt = DummyFixture<T>;
+        const SCOPE: FixtureScope = FixtureScope::Unique;
+
         fn setup(_ctx: &mut TestContext) -> std::result::Result<Vec<Self>, FixtureCreationError>
         where
             Self: Sized,
@@ -366,10 +368,6 @@ mod tests {
 
         fn build(&self) -> Result<DummyFixture<T>, FixtureCreationError> {
             Ok(DummyFixture(self.0.clone()))
-        }
-
-        fn scope() -> FixtureScope {
-            FixtureScope::Unique
         }
     }
 
