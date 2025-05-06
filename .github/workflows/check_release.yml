@@ -75,3 +75,4 @@ jobs:
       run: |
         cargo publish --dry-run -p rustest-macro
         cargo publish --dry-run -p rustest
+        cargo publish --dry-run -p rustest-fixtures
