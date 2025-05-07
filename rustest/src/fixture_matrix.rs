@@ -1,11 +1,11 @@
-use core::{clone::Clone, cmp::PartialEq};
+use std::cmp::PartialEq;
 
 use super::{FixtureBuilder, FixtureCreationError, TestName};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct CallArgs<Types>(pub Types);
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct BuilderCombination<KnownType>(KnownType);
 
 impl<KnownType> PartialEq<KnownType> for BuilderCombination<KnownType>
@@ -197,16 +197,33 @@ impl_fixture_test_name!(
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11)
 );
 
+/// Duplicate trait is really closed to Clone trait but with slightly sementic difference.
+///
+/// Duplicated builders must produce the **SAME** fitxure. `Clone` trait do not provide
+/// this sementics.
+/// Producing the same value implies builders should have some kind of shared cache
+/// (using Rc or Arc) (btw, Rc + Clone is kind of Duplicate).
+pub trait Duplicate {
+    /// Duplicate the value.
+    fn duplicate(&self) -> Self;
+}
+
+impl<T: Duplicate> Duplicate for Vec<T> {
+    fn duplicate(&self) -> Self {
+        self.iter().map(|v| v.duplicate()).collect()
+    }
+}
+
 macro_rules! iter_builder {
     (@call $collect:expr ; $last_name:ident ; $last_builder:expr ; ) => {
         for $last_name in $last_builder.iter() {
-            let combination = BuilderCombination(($last_name.clone(), ));
+            let combination = BuilderCombination(($last_name.duplicate(), ));
             $collect.push(combination)
         }
     };
     (@call $collect:expr ; $last_name:ident ; $last_builder:expr ; $($known:tt),*) => {
         for $last_name in $last_builder.iter() {
-            let combination = BuilderCombination(($($known.clone()),*, $last_name.clone()));
+            let combination = BuilderCombination(($($known.duplicate()),*, $last_name.duplicate()));
             $collect.push(combination)
         }
     };
@@ -226,7 +243,7 @@ macro_rules! impl_fixture_call {
     (($($types:tt),+), ($($bnames:ident),+), ($($fnames:ident),+)) => {
 
         impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
-            $($types : Clone + TestName + 'static),+ ,
+            $($types : Duplicate + TestName + 'static),+ ,
         {
             pub fn flatten(self) -> Vec<BuilderCombination<($($types),+,)>>
             {
@@ -343,17 +360,24 @@ mod tests {
 
     use super::*;
     use crate::{
-        Fixture, FixtureBuilder, FixtureCreationError, FixtureRegistry, FixtureScope, TestContext,
+        Duplicate, Fixture, FixtureBuilder, FixtureCreationError, FixtureRegistry, FixtureScope,
+        TestContext,
     };
 
     #[derive(Debug)]
     struct DummyFixture<T>(T);
 
-    #[derive(Clone, Debug, PartialEq)]
+    #[derive(Debug, PartialEq)]
     struct DummyFixtureBuilder<T>(T);
+
+    impl<T: Copy> Duplicate for DummyFixtureBuilder<T> {
+        fn duplicate(&self) -> Self {
+            Self(self.0)
+        }
+    }
     impl<T> FixtureBuilder for DummyFixtureBuilder<T>
     where
-        T: Send + Clone + std::fmt::Display + std::fmt::Debug + 'static,
+        T: Send + Copy + std::fmt::Display + std::fmt::Debug + 'static,
     {
         type Type = T;
         type Fixt = DummyFixture<T>;
@@ -367,13 +391,13 @@ mod tests {
         }
 
         fn build(&self) -> Result<DummyFixture<T>, FixtureCreationError> {
-            Ok(DummyFixture(self.0.clone()))
+            Ok(DummyFixture(self.0))
         }
     }
 
     impl<T> Fixture for DummyFixture<T>
     where
-        T: Send + Clone + std::fmt::Display + std::fmt::Debug + 'static,
+        T: Send + Copy + std::fmt::Display + std::fmt::Debug + 'static,
     {
         type Type = T;
         type Builder = DummyFixtureBuilder<T>;

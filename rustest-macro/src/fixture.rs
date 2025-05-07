@@ -261,7 +261,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             }
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Debug)]
         #vis struct #fixture_name #fixture_generics #where_clause {
             inner: #inner_type,
             #(#phantom_markers),*

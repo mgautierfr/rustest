@@ -1,8 +1,7 @@
 use super::TestContext;
-use crate::{BuilderCall, BuilderCombination, CallArgs, TestName};
+use crate::{BuilderCall, BuilderCombination, CallArgs, Duplicate, TestName};
 use core::{
     any::{Any, TypeId},
-    clone::Clone,
     default::Default,
     ops::Deref,
     panic::{RefUnwindSafe, UnwindSafe},
@@ -42,7 +41,7 @@ impl FixtureCreationError {
 ///
 /// This trait is automatically impl by fixtures defined with [macro@crate::fixture] attribute macro.
 /// You should not have to impl it.
-pub trait FixtureBuilder: std::fmt::Debug + Clone + TestName {
+pub trait FixtureBuilder: std::fmt::Debug + Duplicate + TestName {
     /// The user type of the fixture.
     type Type;
 
@@ -78,7 +77,7 @@ pub trait BuildableFixture: Fixture {
     fn new(v: SharedFixtureValue<Self::Type>) -> Self;
 }
 
-pub trait SubFixture: BuildableFixture + Clone + std::fmt::Debug + 'static {}
+pub trait SubFixture: BuildableFixture + std::fmt::Debug + 'static {}
 
 /// Represents the scope of a fixture.
 ///
@@ -153,7 +152,7 @@ impl FixtureRegistry {
     {
         self.fixtures.get(&TypeId::of::<B>()).map(|a| {
             let builder = a.downcast_ref::<Vec<B>>().unwrap();
-            builder.clone()
+            builder.duplicate()
         })
     }
 }
@@ -167,7 +166,6 @@ pub type TeardownFn<T> = dyn Fn(&mut T) + Send + RefUnwindSafe + UnwindSafe + Sy
 ///
 /// `FixtureTeardown` holds a value and an optional teardown function that is called when the
 /// fixture is dropped.
-#[derive(Clone)]
 struct FixtureTeardown<T> {
     value: T,
     teardown: Option<Arc<TeardownFn<T>>>,
@@ -188,7 +186,7 @@ impl<T> Drop for FixtureTeardown<T> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum LazyValue<V: std::fmt::Debug, B: std::fmt::Debug> {
     Value(V),
     Builders(Option<BuilderCombination<B>>),
@@ -200,8 +198,8 @@ impl<V: std::fmt::Debug, B: std::fmt::Debug> From<BuilderCombination<B>> for Laz
     }
 }
 
-impl<V: std::fmt::Debug, B: std::fmt::Debug> LazyValue<V, B> {
-    pub fn get<F, T>(&mut self, f: F) -> Result<&V, FixtureCreationError>
+impl<V: std::fmt::Debug + Clone, B: std::fmt::Debug> LazyValue<V, B> {
+    pub fn get<F, T>(&mut self, f: F) -> Result<V, FixtureCreationError>
     where
         F: Fn(CallArgs<T>) -> Result<V, FixtureCreationError>,
         BuilderCombination<B>: BuilderCall<T>,
@@ -212,7 +210,7 @@ impl<V: std::fmt::Debug, B: std::fmt::Debug> LazyValue<V, B> {
         };
 
         match self {
-            LazyValue::Value(v) => Ok(v),
+            LazyValue::Value(v) => Ok(v.clone()),
             LazyValue::Builders(_) => unreachable!(),
         }
     }
