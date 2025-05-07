@@ -1,5 +1,6 @@
 use regex::Regex;
 use std::collections::HashMap;
+use std::process::Output;
 use std::sync::LazyLock;
 
 fn run(options: Option<&[&str]>) -> std::io::Result<std::process::Output> {
@@ -25,16 +26,16 @@ struct TestResult {
 }
 
 struct TestCollector {
-    output: Vec<u8>,
+    output: Output,
     counter: HashMap<Vec<u8>, usize>,
     result: TestResult,
 }
 
 impl TestCollector {
-    fn collect(output: Vec<u8>) -> Self {
+    fn collect(output: Output) -> Self {
         let mut result: TestResult = Default::default();
         let mut counter = HashMap::new();
-        for line in output.split(|char| *char == b'\n') {
+        let mut parse_line = |line: &[u8]| {
             if line.starts_with(b"running ") {
                 let l = String::from_utf8_lossy(line);
                 println!("{}", l);
@@ -74,6 +75,12 @@ impl TestCollector {
                     .and_modify(|count| *count += 1)
                     .or_insert(1);
             }
+        };
+        for line in output.stdout.split(|char| *char == b'\n') {
+            parse_line(line);
+        }
+        for line in output.stderr.split(|char| *char == b'\n') {
+            parse_line(line);
         }
         Self {
             counter,
@@ -84,35 +91,21 @@ impl TestCollector {
     fn check(&mut self, line: &[u8], count: usize) {
         if let Some((_, c)) = self.counter.remove_entry(line) {
             if c != count {
-                eprintln!("{}", String::from_utf8_lossy(&self.output));
-                // [FIXME] This should be panic all the time
-                if std::env::var_os("ENFORCE_TEST_OUTPUT").is_some() {
-                    panic!(
-                        "Check failed: {c} != {count} for line {}",
-                        String::from_utf8_lossy(line)
-                    );
-                } else {
-                    eprintln!(
-                        "Check failed: {c} != {count} for line {}",
-                        String::from_utf8_lossy(line)
-                    );
-                }
+                eprintln!("Stdout : {}", String::from_utf8_lossy(&self.output.stdout));
+                eprintln!("Stderr : {}", String::from_utf8_lossy(&self.output.stderr));
+                panic!(
+                    "Check failed: {c} != {count} for line {}",
+                    String::from_utf8_lossy(line)
+                );
             }
         } else {
             if count != 0 {
-                eprintln!("{}", String::from_utf8_lossy(&self.output));
-                // [FIXME] This should be panic all the time
-                if std::env::var_os("ENFORCE_TEST_OUTPUT").is_some() {
-                    panic!(
-                        "Check failed: Expected no line {}",
-                        String::from_utf8_lossy(line)
-                    );
-                } else {
-                    eprintln!(
-                        "Check failed: Expected no line {}",
-                        String::from_utf8_lossy(line)
-                    );
-                }
+                eprintln!("Stdout : {}", String::from_utf8_lossy(&self.output.stdout));
+                eprintln!("Stderr : {}", String::from_utf8_lossy(&self.output.stderr));
+                panic!(
+                    "Check failed: Expected no line {}",
+                    String::from_utf8_lossy(line)
+                );
             }
         }
     }
@@ -126,12 +119,7 @@ impl TestCollector {
                 .map(|(l, _c)| format!("|{}|", String::from_utf8_lossy(&l)))
                 .collect::<Vec<_>>()
                 .join("\n");
-            // [FIXME] This should be panic all the time
-            if std::env::var_os("ENFORCE_TEST_OUTPUT").is_some() {
-                panic!("Some leftover {count}: {left_over}");
-            } else {
-                eprintln!("Some leftover {count}: {left_over}");
-            }
+            panic!("Some leftover {count}: {left_over}");
         }
     }
 }
@@ -139,7 +127,7 @@ impl TestCollector {
 #[test]
 fn test_output() {
     let output = run(None).unwrap();
-    let mut dict = TestCollector::collect(output.stdout);
+    let mut dict = TestCollector::collect(output);
 
     dict.check(b"BUILD Number", 1);
     dict.check(b"BUILD ParamNumber", 6);
@@ -211,7 +199,7 @@ fn test_output() {
 #[test]
 fn test_output_param_only() {
     let output = run(Some(&["test_param_number"])).unwrap();
-    let mut dict = TestCollector::collect(output.stdout);
+    let mut dict = TestCollector::collect(output);
 
     dict.check(b"BUILD Number", 0);
     dict.check(b"BUILD ParamNumber", 6);
@@ -254,5 +242,11 @@ test_param_global_number_bis[ParamGlobalNumber:42]: test
 ",
         "{}",
         String::from_utf8_lossy(&output.stdout)
+    );
+    assert_eq!(
+        output.stderr,
+        b"",
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
     );
 }
