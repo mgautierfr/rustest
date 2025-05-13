@@ -125,8 +125,8 @@ use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
 pub use fixture::{
-    BuildableFixture, Fixture, FixtureBuilder, FixtureCreationError, FixtureScope, LazyValue,
-    SubFixture, TeardownFn,
+    BuildableFixture, Fixture, FixtureBuilder, FixtureCreationError, FixtureCreationResult,
+    FixtureScope, LazyValue, SubFixture, TeardownFn,
 };
 pub use fixture_builder::{Builder, FixtureDef};
 pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, Duplicate, FixtureMatrix};

@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     BuildableFixture, BuilderCall, BuilderCombination, CallArgs, Duplicate, Fixture,
-    FixtureBuilder, FixtureCreationError, FixtureScope, LazyValue, SharedFixtureValue, TeardownFn,
+    FixtureBuilder, FixtureCreationResult, FixtureScope, LazyValue, SharedFixtureValue, TeardownFn,
     TestName,
 };
 
@@ -18,7 +18,7 @@ pub trait FixtureDef {
 
     fn build_fixt(
         args: CallArgs<Self::SubFixtures>,
-    ) -> Result<<Self::Fixt as Fixture>::Type, FixtureCreationError>;
+    ) -> FixtureCreationResult<<Self::Fixt as Fixture>::Type>;
 
     fn teardown() -> Option<Arc<TeardownFn<<Self::Fixt as Fixture>::Type>>>;
 }
@@ -88,7 +88,7 @@ where
         inners
     }
 
-    fn build(&self) -> std::result::Result<Self::Fixt, crate::FixtureCreationError> {
+    fn build(&self) -> FixtureCreationResult<Self::Fixt> {
         let inner = self
             .inner
             .lock()

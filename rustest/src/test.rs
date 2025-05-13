@@ -46,7 +46,7 @@ pub type LibTestResult = std::result::Result<(), Failed>;
 
 use crate::FixtureBuilder;
 
-use super::{FixtureCreationError, FixtureRegistry, FixtureScope};
+use super::{FixtureCreationResult, FixtureRegistry, FixtureScope};
 use std::any::Any;
 
 #[doc(hidden)]
@@ -77,8 +77,7 @@ impl<T> IntoError for googletest::Result<T> {
 }
 
 pub type TestRunner = dyn FnOnce() -> InnerTestResult + std::panic::UnwindSafe + 'static;
-pub type TestGenerator =
-    dyn FnOnce() -> std::result::Result<Box<TestRunner>, FixtureCreationError> + Send + 'static;
+pub type TestGenerator = dyn FnOnce() -> FixtureCreationResult<Box<TestRunner>> + Send + 'static;
 
 /// An actual test run by rustest
 pub struct Test {

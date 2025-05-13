@@ -104,7 +104,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                         use ::rustest::TestName;
                         let name = c.name();
                         let runner_gen = Box::new(move || {
-                            c.call(move |#sub_fixtures_call_args| -> std::result::Result<Box<::rustest::TestRunner>, _> {
+                            c.call(move |#sub_fixtures_call_args| -> ::rustest::FixtureCreationResult<Box<::rustest::TestRunner>> {
                                 Ok(
                                     Box::new(|| #ident::test(#(#sub_fixtures_inputs),*).into_error()),
                                 )

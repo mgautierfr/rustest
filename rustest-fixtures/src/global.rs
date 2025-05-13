@@ -81,7 +81,7 @@ impl<Source: SubFixture> rustest::FixtureBuilder for GlobalBuilder<Source> {
         builders
     }
 
-    fn build(&self) -> std::result::Result<Self::Fixt, rustest::FixtureCreationError>
+    fn build(&self) -> rustest::FixtureCreationResult<Self::Fixt>
     where
         Self: Sized,
     {

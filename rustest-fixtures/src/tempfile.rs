@@ -49,7 +49,7 @@ impl rustest::FixtureBuilder for TempFileBuilder {
         vec![Self]
     }
 
-    fn build(&self) -> Result<Self::Fixt, rustest::FixtureCreationError> {
+    fn build(&self) -> rustest::FixtureCreationResult<Self::Fixt> {
         Ok(TempFile(
             tempfile::NamedTempFile::new_in(std::env::temp_dir())
                 .map_err(|e| rustest::FixtureCreationError::new("TempFile", e))?,

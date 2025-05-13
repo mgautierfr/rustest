@@ -15,6 +15,8 @@ pub struct FixtureCreationError {
     pub error: Box<dyn std::error::Error>,
 }
 
+pub type FixtureCreationResult<T> = Result<T, FixtureCreationError>;
+
 impl FixtureCreationError {
     /// Creates a new `FixtureCreationError`.
     ///
@@ -62,7 +64,7 @@ pub trait FixtureBuilder: Duplicate + TestName {
     where
         Self: Sized;
 
-    fn build(&self) -> std::result::Result<Self::Fixt, FixtureCreationError>
+    fn build(&self) -> FixtureCreationResult<Self::Fixt>
     where
         Self: Sized;
 }
@@ -198,9 +200,9 @@ impl<V, B> From<BuilderCombination<B>> for LazyValue<V, B> {
 }
 
 impl<V: Clone, B> LazyValue<V, B> {
-    pub fn get<F, T>(&mut self, f: F) -> Result<V, FixtureCreationError>
+    pub fn get<F, T>(&mut self, f: F) -> FixtureCreationResult<V>
     where
-        F: Fn(CallArgs<T>) -> Result<V, FixtureCreationError>,
+        F: Fn(CallArgs<T>) -> FixtureCreationResult<V>,
         BuilderCombination<B>: BuilderCall<T>,
     {
         if let LazyValue::Builders(b) = self {
