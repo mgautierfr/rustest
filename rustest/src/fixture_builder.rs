@@ -1,15 +1,18 @@
-use core::{clone::Clone, marker::PhantomData};
+use std::{
+    marker::PhantomData,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
-    BuildableFixture, BuilderCall, BuilderCombination, CallArgs, Fixture, FixtureBuilder,
-    FixtureCreationError, FixtureScope, LazyValue, SharedFixtureValue, TeardownFn, TestName,
+    BuildableFixture, BuilderCall, BuilderCombination, CallArgs, Duplicate, Fixture,
+    FixtureBuilder, FixtureCreationError, FixtureScope, LazyValue, SharedFixtureValue, TeardownFn,
+    TestName,
 };
-use std::sync::{Arc, Mutex};
 
-pub trait FixtureDef: std::fmt::Debug {
-    type Fixt: BuildableFixture + std::fmt::Debug;
-    type SubFixtures: std::fmt::Debug;
-    type SubBuilders: std::fmt::Debug;
+pub trait FixtureDef {
+    type Fixt: BuildableFixture;
+    type SubFixtures;
+    type SubBuilders;
     const SCOPE: FixtureScope;
     fn setup_matrix(
         ctx: &mut crate::TestContext,
@@ -33,8 +36,8 @@ pub struct Builder<Def: FixtureDef> {
     _marker: PhantomData<Def>,
 }
 
-impl<Def: FixtureDef> Clone for Builder<Def> {
-    fn clone(&self) -> Self {
+impl<Def: FixtureDef> Duplicate for Builder<Def> {
+    fn duplicate(&self) -> Self {
         Self {
             inner: self.inner.clone(),
             name: self.name.clone(),
@@ -43,17 +46,12 @@ impl<Def: FixtureDef> Clone for Builder<Def> {
     }
 }
 
-impl<Def: FixtureDef> std::fmt::Debug for Builder<Def> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Builder").finish()
-    }
-}
-
 impl<Def: FixtureDef> TestName for Builder<Def> {
     fn name(&self) -> Option<String> {
         self.name.clone()
     }
 }
+
 impl<Def: FixtureDef> Builder<Def>
 where
     BuilderCombination<Def::SubBuilders>: TestName,
@@ -90,7 +88,7 @@ where
             .map(|b| Self::new(b))
             .collect::<Vec<_>>();
 
-        ctx.add::<Self>(inners.clone());
+        ctx.add::<Self>(inners.duplicate());
         Ok(inners)
     }
 

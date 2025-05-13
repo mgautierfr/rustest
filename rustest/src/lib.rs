@@ -129,7 +129,7 @@ pub use fixture::{
     SubFixture, TeardownFn,
 };
 pub use fixture_builder::{Builder, FixtureDef};
-pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, FixtureMatrix};
+pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, Duplicate, FixtureMatrix};
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError, TestGenerator, TestRunner};
 pub use test::{Result, Test, TestContext};

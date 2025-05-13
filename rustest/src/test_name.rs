@@ -1,4 +1,3 @@
-use core::{clone::Clone, ops::Deref};
 use std::sync::Mutex;
 
 /// A trait to get the name of a test when we have multiple combination.
@@ -29,6 +28,7 @@ impl_test_name!(
 
 impl<T: TestName> TestName for Box<T> {
     fn name(&self) -> Option<String> {
+        use std::ops::Deref;
         self.deref().name()
     }
 }

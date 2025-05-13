@@ -83,14 +83,18 @@ pub(crate) fn gen_param_fixture(
     };
     if let Some((param_type, expr)) = params {
         quote! {
-            #[derive(Debug)]
             pub struct Param(pub #param_type);
-            #[derive(Clone, Debug)]
             pub struct ParamBuilder(#param_type);
             impl ParamBuilder
             {
                 fn new(inner: #param_type) -> Self {
                     Self(inner)
+                }
+            }
+
+            impl ::rustest::Duplicate for ParamBuilder {
+                fn duplicate(&self) -> Self {
+                    Self(self.0.clone())
                 }
             }
 
