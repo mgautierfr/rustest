@@ -42,13 +42,11 @@ impl rustest::FixtureBuilder for TempFileBuilder {
     type Type = tempfile::NamedTempFile;
     const SCOPE: FixtureScope = FixtureScope::Unique;
 
-    fn setup(
-        _ctx: &mut rustest::TestContext,
-    ) -> std::result::Result<Vec<Self>, rustest::FixtureCreationError>
+    fn setup(_ctx: &mut rustest::TestContext) -> Vec<Self>
     where
         Self: Sized,
     {
-        Ok(vec![Self])
+        vec![Self]
     }
 
     fn build(&self) -> Result<Self::Fixt, rustest::FixtureCreationError> {

@@ -194,7 +194,7 @@ impl<'a> TestContext<'a> {
         reg.get::<B>()
     }
 
-    pub fn get_fixture<Fix>(&mut self) -> std::result::Result<Vec<Fix>, FixtureCreationError>
+    pub fn get_fixture<Fix>(&mut self) -> Vec<Fix>
     where
         Fix: FixtureBuilder + Any,
     {

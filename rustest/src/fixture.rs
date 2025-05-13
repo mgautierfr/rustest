@@ -57,8 +57,8 @@ pub trait FixtureBuilder: Duplicate + TestName {
     ///
     /// # Returns
     ///
-    /// A result containing a vector of fixtures or a `FixtureCreationError`.
-    fn setup(ctx: &mut TestContext) -> std::result::Result<Vec<Self>, FixtureCreationError>
+    /// A result containing a vector of builders.
+    fn setup(ctx: &mut TestContext) -> Vec<Self>
     where
         Self: Sized;
 

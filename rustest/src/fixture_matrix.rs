@@ -380,7 +380,7 @@ mod tests {
         type Fixt = DummyFixture<T>;
         const SCOPE: FixtureScope = FixtureScope::Unique;
 
-        fn setup(_ctx: &mut TestContext) -> std::result::Result<Vec<Self>, FixtureCreationError>
+        fn setup(_ctx: &mut TestContext) -> Vec<Self>
         where
             Self: Sized,
         {

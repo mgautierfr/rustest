@@ -142,8 +142,7 @@ pub use ctor::declarative::ctor;
 ///
 /// Classic function will resolve fixture matrix and generate a [Test] per combination.
 /// Such functions are implement by [test]
-pub type TestGeneratorFn =
-    fn(&mut TestContext) -> ::std::result::Result<Vec<Test>, FixtureCreationError>;
+pub type TestGeneratorFn = fn(&mut TestContext) -> Vec<Test>;
 
 /// Build tests from `test_ctors` and run them.
 ///
@@ -155,22 +154,16 @@ pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode 
 
     let mut global_registry = FixtureRegistry::new();
 
-    let tests: ::std::result::Result<Vec<_>, FixtureCreationError> = test_generators
+    let tests: Vec<_> = test_generators
         .iter()
-        .map(|test_generator| {
+        .flat_map(|test_generator| {
             let mut test_registry = FixtureRegistry::new();
             let mut ctx = TestContext::new(&mut global_registry, &mut test_registry);
-            test_generator(&mut ctx)
+            test_generator(&mut ctx).into_iter()
         })
+        .map(|t| t.into())
         .collect();
 
-    let tests = match tests {
-        Ok(tests) => tests.into_iter().flatten().map(|t| t.into()).collect(),
-        Err(e) => {
-            eprintln!("Failed to create fixture {}: {}", e.fixture_name, e.error);
-            return std::process::ExitCode::FAILURE;
-        }
-    };
     let conclusion = run(&args, tests);
     conclusion.exit_code()
 }

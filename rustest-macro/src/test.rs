@@ -84,13 +84,12 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                 #param_fixture_def
                 pub(super) #sig #block
 
-                pub fn #test_generator_ident(ctx: &mut ::rustest::TestContext)
-                    -> ::std::result::Result<Vec<::rustest::Test>, ::rustest::FixtureCreationError> {
+                pub fn #test_generator_ident(ctx: &mut ::rustest::TestContext) -> Vec<::rustest::Test> {
                     use ::rustest::{FixtureBuilder, IntoError, BuilderCall};
 
                     // We have to call build a Test per combination of fixtures.
                     // Lets build a fixture_matrix.
-                    let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_builders::setup(ctx)?))*;
+                    let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_builders::setup(ctx)))*;
                     let combinations = fixtures_matrix.flatten();
 
                     // Append a fixture identifier to test name if we have multiple fixtures instances
@@ -111,10 +110,10 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                                 )
                             })
                         });
-                        Ok(::rustest::Test::new(test_name(name), #is_xfail, runner_gen))
+                        ::rustest::Test::new(test_name(name), #is_xfail, runner_gen)
                     })
-                    .collect::<::std::result::Result<Vec<_>, _>>()?;
-                    Ok(tests)
+                    .collect::<Vec<_>>();
+                    tests
                 }
             }
 

@@ -14,9 +14,7 @@ pub trait FixtureDef {
     type SubFixtures;
     type SubBuilders;
     const SCOPE: FixtureScope;
-    fn setup_matrix(
-        ctx: &mut crate::TestContext,
-    ) -> Result<Vec<BuilderCombination<Self::SubBuilders>>, FixtureCreationError>;
+    fn setup_matrix(ctx: &mut crate::TestContext) -> Vec<BuilderCombination<Self::SubBuilders>>;
 
     fn build_fixt(
         args: CallArgs<Self::SubFixtures>,
@@ -75,21 +73,19 @@ where
     type Type = <Def::Fixt as Fixture>::Type;
     const SCOPE: FixtureScope = Def::SCOPE;
 
-    fn setup(
-        ctx: &mut crate::TestContext,
-    ) -> std::result::Result<Vec<Self>, crate::FixtureCreationError> {
+    fn setup(ctx: &mut crate::TestContext) -> Vec<Self> {
         if let Some(b) = ctx.get() {
-            return Ok(b);
+            return b;
         }
         // We have to call this function for each combination of its fixtures.
-        let builders = Def::setup_matrix(ctx)?;
+        let builders = Def::setup_matrix(ctx);
         let inners = builders
             .into_iter()
             .map(|b| Self::new(b))
             .collect::<Vec<_>>();
 
         ctx.add::<Self>(inners.duplicate());
-        Ok(inners)
+        inners
     }
 
     fn build(&self) -> std::result::Result<Self::Fixt, crate::FixtureCreationError> {

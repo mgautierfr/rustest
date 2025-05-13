@@ -234,10 +234,10 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
 
             fn setup_matrix(
                 ctx: &mut ::rustest::TestContext
-            ) -> std::result::Result<Vec<::rustest::BuilderCombination<Self::SubBuilders>>, ::rustest::FixtureCreationError> {
+            ) -> Vec<::rustest::BuilderCombination<Self::SubBuilders>> {
                 use ::rustest::FixtureBuilder;
-                let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_builders::setup(ctx)?))*;
-                Ok(fixtures_matrix.flatten())
+                let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_builders::setup(ctx)))*;
+                fixtures_matrix.flatten()
             }
             fn build_fixt(
                 #sub_fixtures_call_args : ::rustest::CallArgs<Self::SubFixtures>,
