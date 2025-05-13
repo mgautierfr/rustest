@@ -83,9 +83,7 @@ pub(crate) fn gen_param_fixture(
     };
     if let Some((param_type, expr)) = params {
         quote! {
-            #[derive(Debug)]
             pub struct Param(pub #param_type);
-            #[derive(Debug)]
             pub struct ParamBuilder(#param_type);
             impl ParamBuilder
             {

@@ -9,10 +9,10 @@ use crate::{
     TestName,
 };
 
-pub trait FixtureDef: std::fmt::Debug {
-    type Fixt: BuildableFixture + std::fmt::Debug;
-    type SubFixtures: std::fmt::Debug;
-    type SubBuilders: std::fmt::Debug;
+pub trait FixtureDef {
+    type Fixt: BuildableFixture;
+    type SubFixtures;
+    type SubBuilders;
     const SCOPE: FixtureScope;
     fn setup_matrix(
         ctx: &mut crate::TestContext,
@@ -43,12 +43,6 @@ impl<Def: FixtureDef> Duplicate for Builder<Def> {
             name: self.name.clone(),
             _marker: PhantomData,
         }
-    }
-}
-
-impl<Def: FixtureDef> std::fmt::Debug for Builder<Def> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Builder").finish()
     }
 }
 

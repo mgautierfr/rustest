@@ -41,7 +41,7 @@ impl FixtureCreationError {
 ///
 /// This trait is automatically impl by fixtures defined with [macro@crate::fixture] attribute macro.
 /// You should not have to impl it.
-pub trait FixtureBuilder: std::fmt::Debug + Duplicate + TestName {
+pub trait FixtureBuilder: Duplicate + TestName {
     /// The user type of the fixture.
     type Type;
 
@@ -69,7 +69,7 @@ pub trait FixtureBuilder: std::fmt::Debug + Duplicate + TestName {
 
 pub trait Fixture: Deref<Target = Self::Type> {
     /// The user type of the fixture.
-    type Type: std::fmt::Debug;
+    type Type;
     type Builder: FixtureBuilder<Fixt = Self>;
 }
 
@@ -77,7 +77,7 @@ pub trait BuildableFixture: Fixture {
     fn new(v: SharedFixtureValue<Self::Type>) -> Self;
 }
 
-pub trait SubFixture: BuildableFixture + std::fmt::Debug + 'static {}
+pub trait SubFixture: BuildableFixture + 'static {}
 
 /// Represents the scope of a fixture.
 ///
@@ -186,19 +186,18 @@ impl<T> Drop for FixtureTeardown<T> {
     }
 }
 
-#[derive(Debug)]
-pub enum LazyValue<V: std::fmt::Debug, B: std::fmt::Debug> {
+pub enum LazyValue<V, B> {
     Value(V),
     Builders(Option<BuilderCombination<B>>),
 }
 
-impl<V: std::fmt::Debug, B: std::fmt::Debug> From<BuilderCombination<B>> for LazyValue<V, B> {
+impl<V, B> From<BuilderCombination<B>> for LazyValue<V, B> {
     fn from(b: BuilderCombination<B>) -> Self {
         Self::Builders(Some(b))
     }
 }
 
-impl<V: std::fmt::Debug + Clone, B: std::fmt::Debug> LazyValue<V, B> {
+impl<V: Clone, B> LazyValue<V, B> {
     pub fn get<F, T>(&mut self, f: F) -> Result<V, FixtureCreationError>
     where
         F: Fn(CallArgs<T>) -> Result<V, FixtureCreationError>,
@@ -222,14 +221,6 @@ impl<V: std::fmt::Debug + Clone, B: std::fmt::Debug> LazyValue<V, B> {
 #[repr(transparent)]
 #[doc(hidden)]
 pub struct SharedFixtureValue<T>(Arc<FixtureTeardown<T>>);
-
-impl<T: std::fmt::Debug> std::fmt::Debug for SharedFixtureValue<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SharedFixtureValue")
-            .field("v", self.deref())
-            .finish()
-    }
-}
 
 impl<T> SharedFixtureValue<T> {
     pub fn new(value: T, teardown: Option<Arc<TeardownFn<T>>>) -> Self {

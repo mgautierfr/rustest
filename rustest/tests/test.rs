@@ -160,7 +160,6 @@ fn test_fixture_inc_number3_2(number: IncNumber3) {
     }
 }
 
-#[derive(Debug)]
 struct ProcessChild(pub std::process::Child);
 
 // This fixture is a sub process stucks in a infinite loop.

@@ -2,10 +2,8 @@ use std::cmp::PartialEq;
 
 use super::{FixtureBuilder, FixtureCreationError, TestName};
 
-#[derive(Debug)]
 pub struct CallArgs<Types>(pub Types);
 
-#[derive(Debug)]
 pub struct BuilderCombination<KnownType>(KnownType);
 
 impl<KnownType> PartialEq<KnownType> for BuilderCombination<KnownType>
@@ -364,7 +362,6 @@ mod tests {
         TestContext,
     };
 
-    #[derive(Debug)]
     struct DummyFixture<T>(T);
 
     #[derive(Debug, PartialEq)]
@@ -377,7 +374,7 @@ mod tests {
     }
     impl<T> FixtureBuilder for DummyFixtureBuilder<T>
     where
-        T: Send + Copy + std::fmt::Display + std::fmt::Debug + 'static,
+        T: Send + Copy + std::fmt::Display + 'static,
     {
         type Type = T;
         type Fixt = DummyFixture<T>;
@@ -397,7 +394,7 @@ mod tests {
 
     impl<T> Fixture for DummyFixture<T>
     where
-        T: Send + Copy + std::fmt::Display + std::fmt::Debug + 'static,
+        T: Send + Copy + std::fmt::Display + 'static,
     {
         type Type = T;
         type Builder = DummyFixtureBuilder<T>;

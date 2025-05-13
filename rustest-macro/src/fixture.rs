@@ -222,7 +222,6 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             #param_fixture_def
         } // end of inner mod
 
-        #[derive(Debug)]
         #vis struct #def_name #fixture_generics #where_clause {
             #(#phantom_markers),*
         }
@@ -261,7 +260,6 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             }
         }
 
-        #[derive(Debug)]
         #vis struct #fixture_name #fixture_generics #where_clause {
             inner: #inner_type,
             #(#phantom_markers),*
