@@ -1,0 +1,60 @@
+use core::ops::Deref;
+
+use rustest::FixtureScope;
+
+pub struct TempFile(pub tempfile::NamedTempFile);
+
+impl TempFile {
+    pub fn into_inner(self) -> tempfile::NamedTempFile {
+        self.0
+    }
+}
+
+impl Deref for TempFile {
+    type Target = tempfile::NamedTempFile;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl rustest::Fixture for TempFile {
+    type Type = tempfile::NamedTempFile;
+    type Builder = TempFileBuilder;
+}
+
+#[derive(Debug)]
+pub struct TempFileBuilder;
+
+impl rustest::Duplicate for TempFileBuilder {
+    fn duplicate(&self) -> Self {
+        Self
+    }
+}
+
+impl rustest::TestName for TempFileBuilder {
+    fn name(&self) -> Option<String> {
+        None
+    }
+}
+
+impl rustest::FixtureBuilder for TempFileBuilder {
+    type Fixt = TempFile;
+    type Type = tempfile::NamedTempFile;
+    const SCOPE: FixtureScope = FixtureScope::Unique;
+
+    fn setup(
+        _ctx: &mut rustest::TestContext,
+    ) -> std::result::Result<Vec<Self>, rustest::FixtureCreationError>
+    where
+        Self: Sized,
+    {
+        Ok(vec![Self])
+    }
+
+    fn build(&self) -> Result<Self::Fixt, rustest::FixtureCreationError> {
+        Ok(TempFile(
+            tempfile::NamedTempFile::new_in(std::env::temp_dir())
+                .map_err(|e| rustest::FixtureCreationError::new("TempFile", e))?,
+        ))
+    }
+}

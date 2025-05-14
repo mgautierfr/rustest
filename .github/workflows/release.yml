@@ -27,3 +27,4 @@ jobs:
         run: |
           cargo publish -p rustest-macro
           cargo publish -p rustest
+          cargo publish -p rustest-fixtures

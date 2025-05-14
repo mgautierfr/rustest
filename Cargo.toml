@@ -1,5 +1,5 @@
 [workspace]
-members = ["rustest", "rustest-macro", "rustest-testing"]
+members = ["rustest", "rustest-macro", "rustest-testing", "rustest-fixtures"]
 resolver = "2"
 
 [workspace.package]

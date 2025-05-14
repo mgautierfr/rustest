@@ -1,0 +1,15 @@
+[package]
+name = "rustest-fixtures"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+rustest = { version = "0.1.0", path = "../rustest" }
+tempfile = "3.19.1"

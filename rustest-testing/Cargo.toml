@@ -12,6 +12,7 @@ categories.workspace = true
 
 [dependencies]
 rustest = { path = "../rustest", features = ["googletest"] }
+rustest-fixtures = { path = "../rustest-fixtures" }
 
 [dev-dependencies]
 googletest = "0.14.0"
@@ -19,4 +20,8 @@ regex = "1.11.1"
 
 
 [lib]
+harness = false
+
+[[test]]
+name = "global_test"
 harness = false
