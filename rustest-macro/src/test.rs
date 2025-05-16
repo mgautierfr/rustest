@@ -12,21 +12,30 @@ fn is_xfail(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("xfail"))
 }
 
+fn is_ignored(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|attr| attr.path().is_ident("ignore"))
+}
+
 #[derive(Debug, PartialEq)]
 pub(crate) struct TestAttr {
     xfail: bool,
+    ignore: bool,
     params: Option<(syn::Type, syn::Expr)>,
 }
 
 impl Parse for TestAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut xfail = false;
+        let mut ignore = false;
         let mut params = None;
         while !input.is_empty() {
             let ident: Ident = input.parse()?;
             match ident.to_string().as_str() {
                 "xfail" => {
                     xfail = true;
+                }
+                "ignore" => {
+                    ignore = true;
                 }
                 "params" => {
                     let _: syn::Token![:] = input.parse()?;
@@ -44,7 +53,11 @@ impl Parse for TestAttr {
                 let _: syn::Token![,] = input.parse()?;
             }
         }
-        Ok(TestAttr { xfail, params })
+        Ok(TestAttr {
+            xfail,
+            ignore,
+            params,
+        })
     }
 }
 
@@ -55,7 +68,11 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
         attrs,
         ..
     } = input;
-    let TestAttr { xfail, params } = args;
+    let TestAttr {
+        xfail,
+        ignore,
+        params,
+    } = args;
 
     let ident = sig.ident.clone();
     sig.ident = Ident::new("test", Span::call_site());
@@ -65,6 +82,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
     let test_register_ident = Ident::new(&format!("__{}_ctor", test_name), Span::call_site());
 
     let is_xfail = xfail || is_xfail(&attrs);
+    let is_ignored = ignore || is_ignored(&attrs);
 
     let FixtureInfo {
         sub_fixtures_builders,
@@ -110,7 +128,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                                 )
                             })
                         });
-                        ::rustest::Test::new(test_name(name), #is_xfail, runner_gen)
+                        ::rustest::Test::new(test_name(name), #is_xfail, #is_ignored, runner_gen)
                     })
                     .collect::<Vec<_>>();
                     tests
@@ -145,6 +163,7 @@ mod tests {
             attr,
             TestAttr {
                 xfail: false,
+                ignore: false,
                 params: None
             }
         );
@@ -170,6 +189,23 @@ mod tests {
             attr,
             TestAttr {
                 xfail: true,
+                ignore: false,
+                params: None
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_test_ignore() {
+        let attr: TestAttr = parse_quote! {
+            ignore
+        };
+
+        assert_eq!(
+            attr,
+            TestAttr {
+                xfail: false,
+                ignore: true,
                 params: None
             }
         );
@@ -185,6 +221,7 @@ mod tests {
             attr,
             TestAttr {
                 xfail: false,
+                ignore: false,
                 params: Some((
                     parse2::<syn::Type>(quote! { (u32,u8) }).unwrap(),
                     parse2::<syn::Expr>(quote! { [(10,5),(42,58)] }).unwrap()
@@ -204,6 +241,7 @@ mod tests {
             attr,
             TestAttr {
                 xfail: true,
+                ignore: false,
                 params: Some((
                     parse2::<syn::Type>(quote! { (u32,u8) }).unwrap(),
                     parse2::<syn::Expr>(quote! { [(10,5),(42,58)] }).unwrap()
@@ -223,6 +261,7 @@ mod tests {
             attr,
             TestAttr {
                 xfail: true,
+                ignore: false,
                 params: Some((
                     parse2::<syn::Type>(quote! { (u32,u8) }).unwrap(),
                     parse2::<syn::Expr>(quote! { [(10,5),(42,58)] }).unwrap()
@@ -265,6 +304,39 @@ mod tests {
     }
 
     #[test]
+    fn test_isignore_empty() {
+        let attr: Vec<Attribute> = vec![];
+
+        assert!(!is_ignored(&attr));
+    }
+
+    #[test]
+    fn test_isignored_ignore() {
+        let attr: Vec<Attribute> = parse_quote! {#[ignore]};
+
+        assert!(is_ignored(&attr));
+    }
+
+    #[test]
+    fn test_isignore_ignore_other() {
+        let attr: Vec<Attribute> = parse_quote! {
+            #[ignore]
+            #[other]
+        };
+
+        assert!(is_ignored(&attr));
+    }
+
+    #[test]
+    fn test_isignore_other() {
+        let attr: Vec<Attribute> = parse_quote! {
+            #[other]
+        };
+
+        assert!(!is_ignored(&attr));
+    }
+
+    #[test]
     fn test_test_impl() {
         let input: ItemFn = parse_quote! {
             fn my_test() {
@@ -274,6 +346,7 @@ mod tests {
 
         let args = TestAttr {
             xfail: false,
+            ignore: false,
             params: None,
         };
 

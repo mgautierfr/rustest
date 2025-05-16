@@ -84,6 +84,7 @@ pub struct Test {
     name: String,
     runner: Box<TestGenerator>,
     xfail: bool,
+    ignore: bool,
 }
 
 fn setup_gtest() {
@@ -109,10 +110,16 @@ fn collect_gtest(test_result: InnerTestResult) -> InnerTestResult {
 
 impl Test {
     /// Build a new test.
-    pub fn new(name: impl Into<String>, xfail: bool, runner: Box<TestGenerator>) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        xfail: bool,
+        ignore: bool,
+        runner: Box<TestGenerator>,
+    ) -> Self {
         Self {
             name: name.into(),
             xfail,
+            ignore,
             runner,
         }
     }
@@ -149,13 +156,16 @@ impl Test {
 impl From<Test> for libtest_mimic::Trial {
     fn from(test: Test) -> Self {
         let xfail = test.xfail;
+        let ignore = test.ignore;
         let mimic_test = Self::test(test.name.clone(), move || test.run());
 
-        if xfail {
+        let mimic_test = if xfail {
             mimic_test.with_kind("XFAIL")
         } else {
             mimic_test
-        }
+        };
+
+        mimic_test.with_ignored_flag(ignore)
     }
 }
 
