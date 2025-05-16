@@ -2,6 +2,7 @@ use std::cmp::PartialEq;
 
 use super::{
     fixture::{FixtureBuilder, FixtureCreationResult},
+    test::TestContext,
     test_name::TestName,
 };
 
@@ -101,6 +102,10 @@ pub struct FixtureMatrix<BuildersTypes> {
     multiple: bool,
 }
 
+pub trait MatrixSetup<SubBuilders> {
+    fn setup(_ctx: &mut TestContext) -> Vec<BuilderCombination<SubBuilders>>;
+}
+
 impl<T> FixtureMatrix<T> {
     /// Does the FixtureMatrix as multiple combination ?
     pub fn is_multiple(&self) -> bool {
@@ -138,6 +143,12 @@ impl FixtureMatrix<()> {
 
     /// Call the function f... with no fixture as this FixtureMatrix is dimension 0.
     pub fn flatten(self) -> Vec<BuilderCombination<()>> {
+        vec![BuilderCombination(())]
+    }
+}
+
+impl MatrixSetup<()> for FixtureMatrix<()> {
+    fn setup(_ctx: &mut TestContext) -> Vec<BuilderCombination<()>> {
         vec![BuilderCombination(())]
     }
 }
@@ -244,6 +255,15 @@ macro_rules! iter_builder {
 }
 
 macro_rules! impl_fixture_call {
+    (@builder_setup, $fixture_matrix:expr, $ctx:expr, $builder:ident) => {{
+        let fixture_matrix = $fixture_matrix.feed($builder::setup($ctx));
+        fixture_matrix.flatten()
+    }};
+    (@builder_setup, $fixture_matrix:expr, $ctx:expr, $builder:ident, $($types:tt),+) => {{
+        let fixture_matrix = $fixture_matrix.feed($builder::setup($ctx));
+        impl_fixture_call!(@builder_setup, fixture_matrix, $ctx, $($types),+)
+    }};
+
     (($($types:tt),+), ($($bnames:ident),+), ($($fnames:ident),+)) => {
 
         impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
@@ -255,6 +275,16 @@ macro_rules! impl_fixture_call {
                 let mut output = vec![];
                 iter_builder!(@call output ; $($fnames),+ ; $($bnames),+ ;);
                 output
+            }
+        }
+
+
+        impl<$($types),+> MatrixSetup<($($types),+,)> for FixtureMatrix<($($types),+,)> where
+            $($types : Duplicate + FixtureBuilder + TestName + 'static),+ ,
+        {
+            fn setup(ctx: &mut TestContext) -> Vec<BuilderCombination<($($types),+,)>> {
+                let fixture_matrix = FixtureMatrix::new();
+                impl_fixture_call!(@builder_setup, fixture_matrix, ctx, $($types),+)
             }
         }
     }

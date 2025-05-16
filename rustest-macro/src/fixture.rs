@@ -232,13 +232,6 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             type SubBuilders =  #sub_builder_types_tuple;
             const SCOPE: ::rustest::FixtureScope = #scope;
 
-            fn setup_matrix(
-                ctx: &mut ::rustest::TestContext
-            ) -> Vec<::rustest::BuilderCombination<Self::SubBuilders>> {
-                use ::rustest::FixtureBuilder;
-                let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_builders::setup(ctx)))*;
-                fixtures_matrix.flatten()
-            }
             fn build_fixt(
                 #sub_fixtures_call_args : ::rustest::CallArgs<Self::SubFixtures>,
             ) -> ::rustest::FixtureCreationResult<<Self::Fixt as ::rustest::Fixture>::Type> {
