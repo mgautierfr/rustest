@@ -1,12 +1,15 @@
-use super::TestContext;
-use crate::{BuilderCall, BuilderCombination, CallArgs, Duplicate, TestName};
-use core::{
+use super::{
+    fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, Duplicate},
+    test::TestContext,
+    test_name::TestName,
+};
+use std::{
     any::{Any, TypeId},
     default::Default,
     ops::Deref,
     panic::{RefUnwindSafe, UnwindSafe},
+    sync::Arc,
 };
-use std::sync::Arc;
 
 /// Represents an error that occurs during the creation of a fixture.
 #[derive(Debug)]
@@ -15,6 +18,7 @@ pub struct FixtureCreationError {
     pub error: Box<dyn std::error::Error>,
 }
 
+/// The result of a fixture creation.
 pub type FixtureCreationResult<T> = Result<T, FixtureCreationError>;
 
 impl FixtureCreationError {
@@ -39,10 +43,9 @@ impl FixtureCreationError {
     }
 }
 
-/// A trait representing a fixture that can be set up and torn down.
+/// A trait representing a [Fixture] builder.
 ///
-/// This trait is automatically impl by fixtures defined with [macro@crate::fixture] attribute macro.
-/// You should not have to impl it.
+///
 pub trait FixtureBuilder: Duplicate + TestName {
     /// The user type of the fixture.
     type Type;
@@ -51,7 +54,11 @@ pub trait FixtureBuilder: Duplicate + TestName {
 
     const SCOPE: FixtureScope;
 
-    /// Sets up the fixture and returns a result containing a vector of fixtures.
+    /// Sets up the builders.
+    ///
+    /// Each builder is responsible to create a fixture.
+    /// When a fixtures is parametrized (either directly or because of its dependencies),
+    /// `setup` must returns as many builders as there is fixtures to build.
     ///
     /// # Arguments
     ///
@@ -64,22 +71,50 @@ pub trait FixtureBuilder: Duplicate + TestName {
     where
         Self: Sized;
 
+    /// Build a fixture.
+    ///
+    /// Note that duplicated builder must build the **SAME** fixture.
+    /// It is up to the builder implementation to take care of needed cache or shared states.
     fn build(&self) -> FixtureCreationResult<Self::Fixt>
     where
         Self: Sized;
 }
 
+/// A trait representing a fixture that can be set up and torn down.
+///
+/// This trait is automatically impl by fixtures defined with [macro@crate::fixture] attribute macro.
+/// You should not have to impl it.
 pub trait Fixture: Deref<Target = Self::Type> {
     /// The user type of the fixture.
     type Type;
     type Builder: FixtureBuilder<Fixt = Self>;
 }
 
-pub trait BuildableFixture: Fixture {
-    fn new(v: SharedFixtureValue<Self::Type>) -> Self;
-}
-
-pub trait SubFixture: BuildableFixture + 'static {}
+/// A fixture that can be used as dependency for another fixture.
+///
+/// This is mainly a static Fixture. This trait is defined as syntaxic suggar to allow :
+/// ```rust
+/// # use rustest::{fixture, SubFixture};
+/// #[fixture]
+/// fn MyFixture<F>(fixt: F) -> u32
+///     where F: SubFixture<Type = u32>
+/// {
+///     *fixt
+/// }
+/// ```
+///
+/// instead of
+///
+/// ```rust
+/// # use rustest::{fixture, Fixture};
+/// #[fixture]
+/// fn MyFixture<F>(fixt: F) -> u32
+///     where F: Fixture<Type = u32> + 'static
+/// {
+///     *fixt
+/// }
+/// ```
+pub trait SubFixture: Fixture + 'static {}
 
 /// Represents the scope of a fixture.
 ///
@@ -188,6 +223,7 @@ impl<T> Drop for FixtureTeardown<T> {
     }
 }
 
+#[doc(hidden)]
 pub enum LazyValue<V, B> {
     Value(V),
     Builders(Option<BuilderCombination<B>>),

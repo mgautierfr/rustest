@@ -18,6 +18,13 @@ rustest-fixtures = { path = "../rustest-fixtures" }
 googletest = "0.14.0"
 regex = "1.11.1"
 
+[[bin]]
+name = "simple_test"
+doc = false
+
+[[bin]]
+name = "ignored_test"
+doc = false
 
 [lib]
 harness = false

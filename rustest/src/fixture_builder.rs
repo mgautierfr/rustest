@@ -3,12 +3,21 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{
-    BuildableFixture, BuilderCall, BuilderCombination, CallArgs, Duplicate, Fixture,
-    FixtureBuilder, FixtureCreationResult, FixtureScope, LazyValue, SharedFixtureValue, TeardownFn,
-    TestName,
+use super::{
+    fixture::{
+        Fixture, FixtureBuilder, FixtureCreationResult, FixtureScope, LazyValue,
+        SharedFixtureValue, TeardownFn,
+    },
+    fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, Duplicate},
+    test_name::TestName,
 };
 
+pub trait BuildableFixture: Fixture {
+    fn new(v: SharedFixtureValue<Self::Type>) -> Self;
+}
+
+/// The definition of a fixture, use by Builder to implement FixtureBuilder.
+#[doc(hidden)]
 pub trait FixtureDef {
     type Fixt: BuildableFixture;
     type SubFixtures;
@@ -28,6 +37,7 @@ type InnerLazy<Def> = LazyValue<
     <Def as FixtureDef>::SubBuilders,
 >;
 
+#[doc(hidden)]
 pub struct Builder<Def: FixtureDef> {
     inner: Arc<Mutex<InnerLazy<Def>>>,
     name: Option<String>,

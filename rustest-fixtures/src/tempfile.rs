@@ -2,9 +2,13 @@ use core::ops::Deref;
 
 use rustest::FixtureScope;
 
+/// A temporary directory.
+///
+/// A temporary file, generated with `tempfile` crate.
 pub struct TempFile(pub tempfile::NamedTempFile);
 
 impl TempFile {
+    /// Convert the fixture to a [tempfile::NamedTempFile]
     pub fn into_inner(self) -> tempfile::NamedTempFile {
         self.0
     }

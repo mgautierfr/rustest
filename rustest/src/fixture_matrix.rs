@@ -1,9 +1,14 @@
 use std::cmp::PartialEq;
 
-use super::{FixtureBuilder, FixtureCreationResult, TestName};
+use super::{
+    fixture::{FixtureBuilder, FixtureCreationResult},
+    test_name::TestName,
+};
 
+#[doc(hidden)]
 pub struct CallArgs<Types>(pub Types);
 
+#[doc(hidden)]
 pub struct BuilderCombination<KnownType>(KnownType);
 
 impl<KnownType> PartialEq<KnownType> for BuilderCombination<KnownType>
@@ -89,6 +94,7 @@ impl_fixture_combination_call!(
 ///
 /// `FixtureMatrix` is used to manage a collection of fixtures.
 /// It acts as an increasing matrix of dimension N as we feed it with new fixtures vector.
+#[doc(hidden)]
 #[derive(Default)]
 pub struct FixtureMatrix<BuildersTypes> {
     builders: BuildersTypes,
@@ -354,10 +360,8 @@ impl_fixture_feed!(
 
 #[cfg(test)]
 mod tests {
-    use core::{option::Option::None, unimplemented};
-
     use super::*;
-    use crate::{Duplicate, Fixture, FixtureBuilder, FixtureRegistry, FixtureScope, TestContext};
+    use crate::{Fixture, FixtureRegistry, FixtureScope, TestContext};
 
     struct DummyFixture<T>(T);
 

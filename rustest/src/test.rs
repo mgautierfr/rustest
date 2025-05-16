@@ -1,6 +1,6 @@
-use core::fmt::Display;
+use super::fixture::FixtureBuilder;
 use libtest_mimic::Failed;
-use std::error::Error;
+use std::{error::Error, fmt::Display};
 
 /// Result of a test.
 pub type Result = std::result::Result<(), Box<dyn Error>>;
@@ -17,7 +17,7 @@ impl InnerTestError {
 }
 
 impl Display for InnerTestError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.msg)
     }
 }
@@ -43,8 +43,6 @@ pub type InnerTestResult = std::result::Result<(), InnerTestError>;
 /// User test is returning a Result and is converted to InnerTestResult with IntoError
 /// trait.
 pub type LibTestResult = std::result::Result<(), Failed>;
-
-use crate::FixtureBuilder;
 
 use super::{FixtureCreationResult, FixtureRegistry, FixtureScope};
 use std::any::Any;
@@ -170,6 +168,8 @@ impl From<Test> for libtest_mimic::Trial {
 }
 
 /// The context of a specific test.
+///
+/// Test context is mainly used to store existing fixture builder when fixture scope is Test or Global.
 pub struct TestContext<'a> {
     global_reg: &'a mut FixtureRegistry,
     reg: &'a mut FixtureRegistry,
