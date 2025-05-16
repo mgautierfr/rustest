@@ -41,5 +41,16 @@ fn test_ignored_param_number(number: ParamNumber) {
     assert_eq!(input * 2, expected);
 }
 
+fn should_ignore() -> bool {
+    std::env::var_os("IGNORE_TEST").is_some()
+}
+
+#[test]
+#[ignore = should_ignore]
+fn test_conditional_ignore(number: Number) {
+    eprintln!("TEST test_conditional_ignore");
+    assert_eq!(*number, 5);
+}
+
 #[main]
 fn main() {}

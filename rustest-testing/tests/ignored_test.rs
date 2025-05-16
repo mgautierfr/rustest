@@ -3,10 +3,18 @@ use std::collections::HashMap;
 use std::process::Output;
 use std::sync::LazyLock;
 
-fn run(options: Option<&[&str]>) -> std::io::Result<std::process::Output> {
+fn run(
+    options: Option<&[&str]>,
+    envs: Option<&[(&str, &str)]>,
+) -> std::io::Result<std::process::Output> {
     let exec = env!("CARGO_BIN_EXE_ignored_test");
     let mut command = std::process::Command::new(&exec);
     command.env("NO_COLOR", "1");
+    envs.map(|envs| {
+        for (name, value) in envs {
+            command.env(name, value);
+        }
+    });
     options.map(|options| {
         for opt in options {
             command.arg(opt);
@@ -38,7 +46,6 @@ impl TestCollector {
         let mut parse_line = |line: &[u8]| {
             if line.starts_with(b"running ") {
                 let l = String::from_utf8_lossy(line);
-                println!("{}", l);
                 static RE: LazyLock<Regex> = LazyLock::new(|| {
                     Regex::new(r"running (?<tested>[[:digit:]]+) tests?").unwrap()
                 });
@@ -126,18 +133,20 @@ impl TestCollector {
 
 #[test]
 fn test_output() {
-    let output = run(None).unwrap();
+    let output = run(None, None).unwrap();
     let mut dict = TestCollector::collect(output);
 
-    dict.check(b"BUILD Number", 1);
+    dict.check(b"BUILD Number", 2);
     dict.check(b"BUILD ParamNumber", 3);
     dict.check(b"TEST test_number", 1);
     dict.check(b"TEST test_param_number", 3);
+    dict.check(b"TEST test_conditional_ignore", 1);
     dict.check(b"test test_number                               ... ok", 1);
     dict.check(
         b"test test_ignored_number                       ... ignored",
         1,
     );
+    dict.check(b"test test_conditional_ignore                   ... ok", 1);
     dict.check(b"test test_param_number[ParamNumber:5]          ... ok", 1);
     dict.check(b"test test_param_number[ParamNumber:6]          ... ok", 1);
     dict.check(b"test test_param_number[ParamNumber:42]         ... ok", 1);
@@ -154,8 +163,8 @@ fn test_output() {
         1,
     );
     dict.check_end(TestResult {
-        tested: 8,
-        passed: 4,
+        tested: 9,
+        passed: 5,
         ignored: 4,
         ..Default::default()
     });
@@ -163,7 +172,7 @@ fn test_output() {
 
 #[test]
 fn test_output_param_only() {
-    let output = run(Some(&["test_param_number"])).unwrap();
+    let output = run(Some(&["test_param_number"]), None).unwrap();
     let mut dict = TestCollector::collect(output);
 
     dict.check(b"BUILD Number", 0);
@@ -193,24 +202,26 @@ fn test_output_param_only() {
     dict.check_end(TestResult {
         tested: 3,
         passed: 3,
-        filtered_out: 5,
+        filtered_out: 6,
         ..Default::default()
     });
 }
 
 #[test]
 fn test_output_ignored() {
-    let output = run(Some(&["--include-ignored"])).unwrap();
+    let output = run(Some(&["--include-ignored"]), None).unwrap();
     let mut dict = TestCollector::collect(output);
 
-    dict.check(b"BUILD Number", 2);
+    dict.check(b"BUILD Number", 3);
     dict.check(b"BUILD ParamNumber", 6);
     dict.check(b"TEST test_number", 1);
     dict.check(b"TEST test_ignored_number", 1);
+    dict.check(b"TEST test_conditional_ignore", 1);
     dict.check(b"TEST test_param_number", 3);
     dict.check(b"TEST test_ignored_param_number", 3);
     dict.check(b"test test_number                               ... ok", 1);
     dict.check(b"test test_ignored_number                       ... ok", 1);
+    dict.check(b"test test_conditional_ignore                   ... ok", 1);
     dict.check(b"test test_param_number[ParamNumber:5]          ... ok", 1);
     dict.check(b"test test_param_number[ParamNumber:6]          ... ok", 1);
     dict.check(b"test test_param_number[ParamNumber:42]         ... ok", 1);
@@ -218,8 +229,8 @@ fn test_output_ignored() {
     dict.check(b"test test_ignored_param_number[ParamNumber:6]  ... ok", 1);
     dict.check(b"test test_ignored_param_number[ParamNumber:42] ... ok", 1);
     dict.check_end(TestResult {
-        tested: 8,
-        passed: 8,
+        tested: 9,
+        passed: 9,
         filtered_out: 0,
         ..Default::default()
     });
@@ -227,7 +238,7 @@ fn test_output_ignored() {
 
 #[test]
 fn test_output_ignored_only() {
-    let output = run(Some(&["--ignored"])).unwrap();
+    let output = run(Some(&["--ignored"]), None).unwrap();
     let mut dict = TestCollector::collect(output);
 
     dict.check(b"BUILD Number", 1);
@@ -247,14 +258,14 @@ fn test_output_ignored_only() {
     dict.check_end(TestResult {
         tested: 4,
         passed: 4,
-        filtered_out: 4,
+        filtered_out: 5,
         ..Default::default()
     });
 }
 
 #[test]
 fn test_output_list() {
-    let output = run(Some(&["--list"])).unwrap();
+    let output = run(Some(&["--list"]), None).unwrap();
     assert_eq!(
         output.stdout,
         b"test_number: test
@@ -265,6 +276,103 @@ test_param_number[ParamNumber:42]: test
 test_ignored_param_number[ParamNumber:5]: test
 test_ignored_param_number[ParamNumber:6]: test
 test_ignored_param_number[ParamNumber:42]: test
+test_conditional_ignore: test
+",
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert_eq!(
+        output.stderr,
+        b"",
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn test_output_env_ignore() {
+    let output = run(None, Some(&[("IGNORE_TEST", "1")])).unwrap();
+    let mut dict = TestCollector::collect(output);
+
+    dict.check(b"BUILD Number", 1);
+    dict.check(b"BUILD ParamNumber", 3);
+    dict.check(b"TEST test_number", 1);
+    dict.check(b"TEST test_param_number", 3);
+    dict.check(b"TEST test_conditional_ignore", 0);
+    dict.check(b"test test_number                               ... ok", 1);
+    dict.check(
+        b"test test_ignored_number                       ... ignored",
+        1,
+    );
+    dict.check(
+        b"test test_conditional_ignore                   ... ignored",
+        1,
+    );
+    dict.check(b"test test_param_number[ParamNumber:5]          ... ok", 1);
+    dict.check(b"test test_param_number[ParamNumber:6]          ... ok", 1);
+    dict.check(b"test test_param_number[ParamNumber:42]         ... ok", 1);
+    dict.check(
+        b"test test_ignored_param_number[ParamNumber:5]  ... ignored",
+        1,
+    );
+    dict.check(
+        b"test test_ignored_param_number[ParamNumber:6]  ... ignored",
+        1,
+    );
+    dict.check(
+        b"test test_ignored_param_number[ParamNumber:42] ... ignored",
+        1,
+    );
+    dict.check_end(TestResult {
+        tested: 9,
+        passed: 4,
+        ignored: 5,
+        ..Default::default()
+    });
+}
+#[test]
+fn test_output_ignored_only_env_ignore() {
+    let output = run(Some(&["--ignored"]), Some(&[("IGNORE_TEST", "1")])).unwrap();
+    let mut dict = TestCollector::collect(output);
+
+    dict.check(b"BUILD Number", 2);
+    dict.check(b"BUILD ParamNumber", 3);
+    dict.check(b"TEST test_number", 0);
+    dict.check(b"TEST test_ignored_number", 1);
+    dict.check(b"TEST test_conditional_ignore", 1);
+    dict.check(b"TEST test_param_number", 0);
+    dict.check(b"TEST test_ignored_param_number", 3);
+    dict.check(b"test test_number                               ... ok", 0);
+    dict.check(b"test test_ignored_number                       ... ok", 1);
+    dict.check(b"test test_conditional_ignore                   ... ok", 1);
+    dict.check(b"test test_param_number[ParamNumber:5]          ... ok", 0);
+    dict.check(b"test test_param_number[ParamNumber:6]          ... ok", 0);
+    dict.check(b"test test_param_number[ParamNumber:42]         ... ok", 0);
+    dict.check(b"test test_ignored_param_number[ParamNumber:5]  ... ok", 1);
+    dict.check(b"test test_ignored_param_number[ParamNumber:6]  ... ok", 1);
+    dict.check(b"test test_ignored_param_number[ParamNumber:42] ... ok", 1);
+    dict.check_end(TestResult {
+        tested: 5,
+        passed: 5,
+        filtered_out: 4,
+        ..Default::default()
+    });
+}
+
+#[test]
+fn test_output_list_env_ignore() {
+    let output = run(Some(&["--list"]), Some(&[("IGNORE_TEST", "1")])).unwrap();
+    assert_eq!(
+        output.stdout,
+        b"test_number: test
+test_ignored_number: test
+test_param_number[ParamNumber:5]: test
+test_param_number[ParamNumber:6]: test
+test_param_number[ParamNumber:42]: test
+test_ignored_param_number[ParamNumber:5]: test
+test_ignored_param_number[ParamNumber:6]: test
+test_ignored_param_number[ParamNumber:42]: test
+test_conditional_ignore: test
 ",
         "{}",
         String::from_utf8_lossy(&output.stdout)

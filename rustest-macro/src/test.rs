@@ -2,7 +2,7 @@ use core::sync::atomic::AtomicUsize;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{Attribute, ItemFn, LitStr};
+use syn::{Attribute, ItemFn, LitStr, Meta, MetaNameValue, parse_quote};
 
 use crate::utils::{FixtureInfo, gen_fixture_call, gen_param_fixture, to_call_args};
 
@@ -12,21 +12,38 @@ fn is_xfail(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("xfail"))
 }
 
-fn is_ignored(attrs: &[Attribute]) -> bool {
-    attrs.iter().any(|attr| attr.path().is_ident("ignore"))
+fn is_ignored(attrs: &[Attribute]) -> Result<Option<syn::Expr>, TokenStream> {
+    attrs
+        .iter()
+        .find_map(|attr| {
+            if attr.path().is_ident("ignore") {
+                match &attr.meta {
+                    Meta::Path(_) => Some(Ok(parse_quote! { || true })),
+                    Meta::NameValue(MetaNameValue { value, .. }) => Some(Ok(value.clone())),
+                    _ => Some(Err(syn::Error::new_spanned(
+                        attr,
+                        "Invalid format for ignore attr.",
+                    )
+                    .to_compile_error())),
+                }
+            } else {
+                None
+            }
+        })
+        .transpose()
 }
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct TestAttr {
     xfail: bool,
-    ignore: bool,
+    ignore: Option<syn::Expr>,
     params: Option<(syn::Type, syn::Expr)>,
 }
 
 impl Parse for TestAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut xfail = false;
-        let mut ignore = false;
+        let mut ignore = None;
         let mut params = None;
         while !input.is_empty() {
             let ident: Ident = input.parse()?;
@@ -35,7 +52,12 @@ impl Parse for TestAttr {
                     xfail = true;
                 }
                 "ignore" => {
-                    ignore = true;
+                    if input.parse::<syn::Token![=]>().is_ok() {
+                        let expr = input.parse()?;
+                        ignore = Some(expr);
+                    } else {
+                        ignore = Some(parse_quote! { || true });
+                    }
                 }
                 "params" => {
                     let _: syn::Token![:] = input.parse()?;
@@ -82,7 +104,10 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
     let test_register_ident = Ident::new(&format!("__{}_ctor", test_name), Span::call_site());
 
     let is_xfail = xfail || is_xfail(&attrs);
-    let is_ignored = ignore || is_ignored(&attrs);
+    let ignored_fn = match ignore {
+        Some(func) => func,
+        None => is_ignored(&attrs)?.unwrap_or(parse_quote! {|| false}),
+    };
 
     let FixtureInfo {
         sub_fixtures_builders,
@@ -117,6 +142,8 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                         |name| #test_name_str.to_owned()
                     };
 
+                    let is_ignored = #ignored_fn;
+
                     // Lets loop on all the fixture combinations and build a Test for each of them.
                     let tests = combinations.into_iter().map(|c| {
                         use ::rustest::TestName;
@@ -128,7 +155,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                                 )
                             })
                         });
-                        ::rustest::Test::new(test_name(name), #is_xfail, #is_ignored, runner_gen)
+                        ::rustest::Test::new(test_name(name), #is_xfail, is_ignored(), runner_gen)
                     })
                     .collect::<Vec<_>>();
                     tests
@@ -163,7 +190,7 @@ mod tests {
             attr,
             TestAttr {
                 xfail: false,
-                ignore: false,
+                ignore: None,
                 params: None
             }
         );
@@ -189,7 +216,7 @@ mod tests {
             attr,
             TestAttr {
                 xfail: true,
-                ignore: false,
+                ignore: None,
                 params: None
             }
         );
@@ -205,10 +232,35 @@ mod tests {
             attr,
             TestAttr {
                 xfail: false,
-                ignore: true,
+                ignore: Some(parse_quote! {|| true}),
                 params: None
             }
         );
+    }
+
+    #[test]
+    fn test_parse_test_ignore_fn() {
+        let attr: TestAttr = parse_quote! {
+            ignore = || true
+        };
+
+        assert_eq!(
+            attr,
+            TestAttr {
+                xfail: false,
+                ignore: Some(parse_quote! {|| true}),
+                params: None
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_test_ignore_fn_wrong_syntax() {
+        let parse_result = parse2::<TestAttr>(quote! {
+            ignore(|| true)
+        });
+
+        assert!(parse_result.is_err());
     }
 
     #[test]
@@ -221,11 +273,8 @@ mod tests {
             attr,
             TestAttr {
                 xfail: false,
-                ignore: false,
-                params: Some((
-                    parse2::<syn::Type>(quote! { (u32,u8) }).unwrap(),
-                    parse2::<syn::Expr>(quote! { [(10,5),(42,58)] }).unwrap()
-                ))
+                ignore: None,
+                params: Some((parse_quote! { (u32,u8) }, parse_quote! { [(10,5),(42,58)] }))
             }
         );
     }
@@ -241,11 +290,8 @@ mod tests {
             attr,
             TestAttr {
                 xfail: true,
-                ignore: false,
-                params: Some((
-                    parse2::<syn::Type>(quote! { (u32,u8) }).unwrap(),
-                    parse2::<syn::Expr>(quote! { [(10,5),(42,58)] }).unwrap()
-                ))
+                ignore: None,
+                params: Some((parse_quote! { (u32,u8) }, parse_quote! { [(10,5),(42,58)] }))
             }
         );
     }
@@ -261,11 +307,8 @@ mod tests {
             attr,
             TestAttr {
                 xfail: true,
-                ignore: false,
-                params: Some((
-                    parse2::<syn::Type>(quote! { (u32,u8) }).unwrap(),
-                    parse2::<syn::Expr>(quote! { [(10,5),(42,58)] }).unwrap()
-                ))
+                ignore: None,
+                params: Some((parse_quote! { (u32,u8) }, parse_quote! { [(10,5),(42,58)] }))
             }
         );
     }
@@ -307,14 +350,29 @@ mod tests {
     fn test_isignore_empty() {
         let attr: Vec<Attribute> = vec![];
 
-        assert!(!is_ignored(&attr));
+        assert!(is_ignored(&attr).unwrap().is_none());
     }
 
     #[test]
     fn test_isignored_ignore() {
         let attr: Vec<Attribute> = parse_quote! {#[ignore]};
 
-        assert!(is_ignored(&attr));
+        assert!(is_ignored(&attr).unwrap().is_some());
+        assert_eq!(
+            is_ignored(&attr).unwrap().unwrap(),
+            parse_quote! { || true }
+        );
+    }
+
+    #[test]
+    fn test_isignored_ignore_fn() {
+        let attr: Vec<Attribute> = parse_quote! {#[ignore=ignore_func]};
+
+        assert!(is_ignored(&attr).unwrap().is_some());
+        assert_eq!(
+            is_ignored(&attr).unwrap().unwrap(),
+            parse_quote! { ignore_func }
+        );
     }
 
     #[test]
@@ -324,7 +382,7 @@ mod tests {
             #[other]
         };
 
-        assert!(is_ignored(&attr));
+        assert!(is_ignored(&attr).unwrap().is_some());
     }
 
     #[test]
@@ -333,7 +391,7 @@ mod tests {
             #[other]
         };
 
-        assert!(!is_ignored(&attr));
+        assert!(is_ignored(&attr).unwrap().is_none());
     }
 
     #[test]
@@ -346,7 +404,7 @@ mod tests {
 
         let args = TestAttr {
             xfail: false,
-            ignore: false,
+            ignore: None,
             params: None,
         };
 
