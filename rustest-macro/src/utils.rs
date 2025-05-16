@@ -112,11 +112,11 @@ pub(crate) fn gen_param_fixture(
                 type Fixt = Param;
                 const SCOPE : ::rustest::FixtureScope = ::rustest::FixtureScope::Test;
 
-                fn setup(ctx: &mut ::rustest::TestContext) -> std::result::Result<Vec<Self>, ::rustest::FixtureCreationError> {
-                    Ok(#expr.into_iter().map(|i| Self::new(i)).collect())
+                fn setup(ctx: &mut ::rustest::TestContext) -> Vec<Self> {
+                    #expr.into_iter().map(|i| Self::new(i)).collect()
                 }
 
-                fn build(&self) -> std::result::Result<Self::Fixt, ::rustest::FixtureCreationError> {
+                fn build(&self) -> ::rustest::FixtureCreationResult<Self::Fixt> {
                     Ok(Param(self.0.clone()))
                 }
             }

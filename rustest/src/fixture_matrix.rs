@@ -1,6 +1,6 @@
 use std::cmp::PartialEq;
 
-use super::{FixtureBuilder, FixtureCreationError, TestName};
+use super::{FixtureBuilder, FixtureCreationResult, TestName};
 
 pub struct CallArgs<Types>(pub Types);
 
@@ -16,9 +16,9 @@ where
 }
 
 pub trait BuilderCall<Args> {
-    fn call<F, Output>(self, f: F) -> Result<Output, FixtureCreationError>
+    fn call<F, Output>(self, f: F) -> FixtureCreationResult<Output>
     where
-        F: FnOnce(CallArgs<Args>) -> Result<Output, FixtureCreationError>;
+        F: FnOnce(CallArgs<Args>) -> FixtureCreationResult<Output>;
 }
 
 macro_rules! impl_fixture_combination_call {
@@ -28,9 +28,9 @@ macro_rules! impl_fixture_combination_call {
             fn call<F, Output>(
                 self,
                 f: F,
-            ) -> Result<Output, FixtureCreationError>
+            ) -> FixtureCreationResult<Output>
                 where
-                F: FnOnce(CallArgs<()>) -> Result<Output, FixtureCreationError>,
+                F: FnOnce(CallArgs<()>) -> FixtureCreationResult<Output>,
             {
                 f(CallArgs(()))
             }
@@ -44,9 +44,9 @@ macro_rules! impl_fixture_combination_call {
             fn call<F, Output>(
                 self,
                 f: F,
-            ) -> Result<Output, FixtureCreationError>
+            ) -> FixtureCreationResult<Output>
                 where
-                F: FnOnce(CallArgs<($($types::Fixt),+,)>) -> Result<Output, FixtureCreationError>,
+                F: FnOnce(CallArgs<($($types::Fixt),+,)>) -> FixtureCreationResult<Output>,
             {
                 let ($($names),+, ) = self.0;
                 let call_args = CallArgs(($($names.build()?),+,));
@@ -357,10 +357,7 @@ mod tests {
     use core::{option::Option::None, unimplemented};
 
     use super::*;
-    use crate::{
-        Duplicate, Fixture, FixtureBuilder, FixtureCreationError, FixtureRegistry, FixtureScope,
-        TestContext,
-    };
+    use crate::{Duplicate, Fixture, FixtureBuilder, FixtureRegistry, FixtureScope, TestContext};
 
     struct DummyFixture<T>(T);
 
@@ -380,14 +377,14 @@ mod tests {
         type Fixt = DummyFixture<T>;
         const SCOPE: FixtureScope = FixtureScope::Unique;
 
-        fn setup(_ctx: &mut TestContext) -> std::result::Result<Vec<Self>, FixtureCreationError>
+        fn setup(_ctx: &mut TestContext) -> Vec<Self>
         where
             Self: Sized,
         {
             unimplemented!()
         }
 
-        fn build(&self) -> Result<DummyFixture<T>, FixtureCreationError> {
+        fn build(&self) -> FixtureCreationResult<DummyFixture<T>> {
             Ok(DummyFixture(self.0))
         }
     }

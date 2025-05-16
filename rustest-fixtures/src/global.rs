@@ -65,25 +65,23 @@ impl<Source: SubFixture> rustest::FixtureBuilder for GlobalBuilder<Source> {
     type Type = Source::Type;
     const SCOPE: rustest::FixtureScope = rustest::FixtureScope::Global;
 
-    fn setup(
-        ctx: &mut rustest::TestContext,
-    ) -> std::result::Result<Vec<Self>, rustest::FixtureCreationError>
+    fn setup(ctx: &mut rustest::TestContext) -> Vec<Self>
     where
         Self: Sized,
     {
         if let Some(b) = ctx.get() {
-            return Ok(b);
+            return b;
         }
-        let builders: Vec<_> = Source::Builder::setup(ctx)?
+        let builders: Vec<_> = Source::Builder::setup(ctx)
             .into_iter()
             .map(|b| Self(b))
             .collect();
 
         ctx.add::<Self>(builders.duplicate());
-        Ok(builders)
+        builders
     }
 
-    fn build(&self) -> std::result::Result<Self::Fixt, rustest::FixtureCreationError>
+    fn build(&self) -> rustest::FixtureCreationResult<Self::Fixt>
     where
         Self: Sized,
     {

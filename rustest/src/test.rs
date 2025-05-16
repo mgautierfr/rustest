@@ -46,7 +46,7 @@ pub type LibTestResult = std::result::Result<(), Failed>;
 
 use crate::FixtureBuilder;
 
-use super::{FixtureCreationError, FixtureRegistry, FixtureScope};
+use super::{FixtureCreationResult, FixtureRegistry, FixtureScope};
 use std::any::Any;
 
 #[doc(hidden)]
@@ -77,14 +77,14 @@ impl<T> IntoError for googletest::Result<T> {
 }
 
 pub type TestRunner = dyn FnOnce() -> InnerTestResult + std::panic::UnwindSafe + 'static;
-pub type TestGenerator =
-    dyn FnOnce() -> std::result::Result<Box<TestRunner>, FixtureCreationError> + Send + 'static;
+pub type TestGenerator = dyn FnOnce() -> FixtureCreationResult<Box<TestRunner>> + Send + 'static;
 
 /// An actual test run by rustest
 pub struct Test {
     name: String,
     runner: Box<TestGenerator>,
     xfail: bool,
+    ignore: bool,
 }
 
 fn setup_gtest() {
@@ -110,10 +110,16 @@ fn collect_gtest(test_result: InnerTestResult) -> InnerTestResult {
 
 impl Test {
     /// Build a new test.
-    pub fn new(name: impl Into<String>, xfail: bool, runner: Box<TestGenerator>) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        xfail: bool,
+        ignore: bool,
+        runner: Box<TestGenerator>,
+    ) -> Self {
         Self {
             name: name.into(),
             xfail,
+            ignore,
             runner,
         }
     }
@@ -150,13 +156,16 @@ impl Test {
 impl From<Test> for libtest_mimic::Trial {
     fn from(test: Test) -> Self {
         let xfail = test.xfail;
+        let ignore = test.ignore;
         let mimic_test = Self::test(test.name.clone(), move || test.run());
 
-        if xfail {
+        let mimic_test = if xfail {
             mimic_test.with_kind("XFAIL")
         } else {
             mimic_test
-        }
+        };
+
+        mimic_test.with_ignored_flag(ignore)
     }
 }
 
@@ -194,7 +203,7 @@ impl<'a> TestContext<'a> {
         reg.get::<B>()
     }
 
-    pub fn get_fixture<Fix>(&mut self) -> std::result::Result<Vec<Fix>, FixtureCreationError>
+    pub fn get_fixture<Fix>(&mut self) -> Vec<Fix>
     where
         Fix: FixtureBuilder + Any,
     {
