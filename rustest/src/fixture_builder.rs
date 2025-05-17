@@ -14,14 +14,10 @@ use super::{
     test_name::TestName,
 };
 
-pub trait BuildableFixture: Fixture {
-    fn new(v: SharedFixtureValue<Self::Type>) -> Self;
-}
-
 /// The definition of a fixture, use by Builder to implement FixtureBuilder.
 #[doc(hidden)]
 pub trait FixtureDef {
-    type Fixt: BuildableFixture;
+    type Fixt: Fixture;
     type SubFixtures;
     type SubBuilders;
     const SCOPE: FixtureScope;
@@ -80,6 +76,7 @@ impl<Def: FixtureDef + 'static> FixtureBuilder for Builder<Def>
 where
     BuilderCombination<Def::SubBuilders>: TestName + BuilderCall<Def::SubFixtures>,
     FixtureMatrix<Def::SubBuilders>: MatrixSetup<Def::SubBuilders>,
+    Def::Fixt: From<SharedFixtureValue<<Def::Fixt as Fixture>::Type>>,
 {
     type Fixt = Def::Fixt;
     type Type = <Def::Fixt as Fixture>::Type;
@@ -112,6 +109,6 @@ where
                 ))
             })?
             .clone();
-        Ok(Self::Fixt::new(inner))
+        Ok(inner.into())
     }
 }

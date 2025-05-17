@@ -129,7 +129,7 @@ pub use fixture::{
     TeardownFn,
 };
 #[doc(hidden)]
-pub use fixture_builder::{BuildableFixture, Builder, FixtureDef};
+pub use fixture_builder::{Builder, FixtureDef};
 pub use fixture_matrix::Duplicate;
 #[doc(hidden)]
 pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, FixtureMatrix};

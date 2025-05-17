@@ -264,14 +264,14 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         impl #impl_generics ::rustest::SubFixture for #fixture_name #ty_generics #where_clause {
         }
 
-        impl #impl_generics ::rustest::BuildableFixture for #fixture_name #ty_generics #where_clause {
-            fn new(inner : ::rustest::SharedFixtureValue<Self::Type>) -> Self {
+        impl #impl_generics From<#inner_type> for #fixture_name #ty_generics #where_clause {
+            fn from(inner : #inner_type) -> Self {
                 Self{
                     inner,
                     #(#phantom_builders),*
                 }
             }
-         }
+        }
 
         impl #impl_generics ::std::ops::Deref for #fixture_name #ty_generics #where_clause {
             type Target = <Self as ::rustest::Fixture>::Type;
