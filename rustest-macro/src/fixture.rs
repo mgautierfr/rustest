@@ -237,15 +237,14 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             ) -> ::rustest::FixtureCreationResult<<Self::Fixt as ::rustest::Fixture>::Type> {
                 use ::rustest::FixtureBuilder;
                 #use_param
+
                 fn user_provided_setup #fixture_generics (#sig_inputs) #builder_output #where_clause
                 #block
-                // This is a lambda which call the initial impl of the fixture and transform the (#fixture_type) into a
-                // `Resutl<#fixture_type, >` if this is not already a `Result`.
-                let user_provided_setup_as_result = |#(#sub_fixtures_inputs),*| {
-                    let result = user_provided_setup(#(#sub_fixtures_inputs),*);
-                    #convert_result
-                };
-                user_provided_setup_as_result(#(#sub_fixtures_inputs),*)
+
+                let result = user_provided_setup(#(#sub_fixtures_inputs),*);
+                // Transform the (#fixture_type) into a `Result<#fixture_type, _>` if it is not
+                // already a `Result`.
+                #convert_result
             }
 
             fn teardown() -> Option<std::sync::Arc<::rustest::TeardownFn<<Self::Fixt as ::rustest::Fixture>::Type>>> {
