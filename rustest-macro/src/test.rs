@@ -1,6 +1,6 @@
-use core::sync::atomic::AtomicUsize;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, ItemFn, LitStr, Meta, MetaNameValue, parse_quote};
 
@@ -118,7 +118,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 
     let param_fixture_def = gen_param_fixture(&params, None);
 
-    let test_idx = TEST_COUNT.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    let test_idx = TEST_COUNT.fetch_add(1, Ordering::Relaxed);
 
     Ok(quote! {
 

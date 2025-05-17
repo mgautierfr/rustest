@@ -1,5 +1,3 @@
-use core::assert_eq;
-
 use rustest::{test, *};
 
 #[fixture]

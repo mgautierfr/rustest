@@ -1,4 +1,3 @@
-use core::assert_eq;
 use std::{
     process::Stdio,
     sync::{Mutex, atomic::AtomicU32},

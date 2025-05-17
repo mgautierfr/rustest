@@ -2,10 +2,10 @@ mod fixture;
 mod test;
 mod utils;
 
-use core::{convert::From, sync::atomic::Ordering};
 use fixture::{FixtureAttr, fixture_impl};
 use proc_macro::TokenStream;
 use quote::quote;
+use std::sync::atomic::Ordering;
 use syn::{ItemFn, parse_macro_input};
 use test::{TEST_COUNT, TestAttr, test_impl};
 

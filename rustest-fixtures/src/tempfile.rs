@@ -1,4 +1,4 @@
-use core::ops::Deref;
+use std::ops::Deref;
 
 use rustest::FixtureScope;
 
