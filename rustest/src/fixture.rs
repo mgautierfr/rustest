@@ -116,6 +116,8 @@ pub trait Fixture: Deref<Target = Self::Type> {
 /// ```
 pub trait SubFixture: Fixture + 'static {}
 
+impl<F> SubFixture for F where F: Fixture + 'static {}
+
 /// Represents the scope of a fixture.
 ///
 /// The scope determines the test's "lifetime" of the fixture.

@@ -261,9 +261,6 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             type Builder = ::rustest::Builder<#def_name #ty_generics>;
         }
 
-        impl #impl_generics ::rustest::SubFixture for #fixture_name #ty_generics #where_clause {
-        }
-
         impl #impl_generics From<#inner_type> for #fixture_name #ty_generics #where_clause {
             fn from(inner : #inner_type) -> Self {
                 Self{
