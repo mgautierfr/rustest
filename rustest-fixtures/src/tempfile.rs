@@ -5,7 +5,7 @@ use std::{
 
 use rustest::{FixtureCreationResult, FixtureScope};
 
-/// A temporary directory.
+/// A temporary file.
 ///
 /// A temporary file, generated with `tempfile` crate.
 #[derive(Clone)]
