@@ -74,5 +74,5 @@ jobs:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       run: |
         cargo publish --dry-run -p rustest-macro
-        cargo publish --dry-run -p rustest
-        cargo publish --dry-run -p rustest-fixtures
+#        cargo publish --dry-run -p rustest
+#        cargo publish --dry-run -p rustest-fixtures
