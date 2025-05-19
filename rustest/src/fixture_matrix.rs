@@ -1,4 +1,4 @@
-use std::cmp::PartialEq;
+use std::{cmp::PartialEq, sync::Arc};
 
 use super::{
     fixture::{FixtureBuilder, FixtureCreationResult},
@@ -226,6 +226,12 @@ pub trait Duplicate {
 impl<T: Duplicate> Duplicate for Vec<T> {
     fn duplicate(&self) -> Self {
         self.iter().map(|v| v.duplicate()).collect()
+    }
+}
+
+impl<T: Duplicate> Duplicate for Arc<T> {
+    fn duplicate(&self) -> Self {
+        Arc::clone(self)
     }
 }
 
