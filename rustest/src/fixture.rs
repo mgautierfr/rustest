@@ -12,10 +12,10 @@ use std::{
 };
 
 /// Represents an error that occurs during the creation of a fixture.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FixtureCreationError {
     pub fixture_name: String,
-    pub error: Box<dyn std::error::Error>,
+    pub error: Arc<dyn std::error::Error + Sync + Send>,
 }
 
 /// The result of a fixture creation.
@@ -34,11 +34,11 @@ impl FixtureCreationError {
     /// A new instance of `FixtureCreationError`.
     pub fn new<T>(fixture_name: &str, error: T) -> Self
     where
-        T: std::error::Error + 'static,
+        T: std::error::Error + Sync + Send + 'static,
     {
         Self {
             fixture_name: fixture_name.into(),
-            error: Box::new(error),
+            error: Arc::new(error),
         }
     }
 }
