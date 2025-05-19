@@ -23,7 +23,6 @@ impl rustest::Fixture for TempFile {
     type Builder = TempFileBuilder;
 }
 
-#[derive(Debug)]
 pub struct TempFileBuilder(Arc<OnceLock<FixtureCreationResult<Arc<tempfile::NamedTempFile>>>>);
 
 impl rustest::Duplicate for TempFileBuilder {
