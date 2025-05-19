@@ -125,15 +125,17 @@ use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
 pub use fixture::{
-    BuildableFixture, Fixture, FixtureBuilder, FixtureCreationError, FixtureCreationResult,
-    FixtureScope, LazyValue, SubFixture, TeardownFn,
+    Fixture, FixtureBuilder, FixtureCreationError, FixtureCreationResult, FixtureScope, SubFixture,
+    TeardownFn,
 };
+#[doc(hidden)]
 pub use fixture_builder::{Builder, FixtureDef};
-pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, Duplicate, FixtureMatrix};
+pub use fixture_matrix::Duplicate;
+#[doc(hidden)]
+pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, FixtureMatrix};
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError, TestGenerator, TestRunner};
 pub use test::{Result, Test, TestContext};
-#[doc(hidden)]
 pub use test_name::TestName;
 
 pub use ctor::declarative::ctor;

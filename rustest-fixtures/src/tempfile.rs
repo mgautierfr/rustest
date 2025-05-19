@@ -1,14 +1,15 @@
-use core::ops::Deref;
+use std::{
+    ops::Deref,
+    sync::{Arc, OnceLock},
+};
 
-use rustest::FixtureScope;
+use rustest::{FixtureCreationResult, FixtureScope};
 
-pub struct TempFile(pub tempfile::NamedTempFile);
-
-impl TempFile {
-    pub fn into_inner(self) -> tempfile::NamedTempFile {
-        self.0
-    }
-}
+/// A temporary directory.
+///
+/// A temporary file, generated with `tempfile` crate.
+#[derive(Clone)]
+pub struct TempFile(Arc<tempfile::NamedTempFile>);
 
 impl Deref for TempFile {
     type Target = tempfile::NamedTempFile;
@@ -22,12 +23,11 @@ impl rustest::Fixture for TempFile {
     type Builder = TempFileBuilder;
 }
 
-#[derive(Debug)]
-pub struct TempFileBuilder;
+pub struct TempFileBuilder(Arc<OnceLock<FixtureCreationResult<Arc<tempfile::NamedTempFile>>>>);
 
 impl rustest::Duplicate for TempFileBuilder {
     fn duplicate(&self) -> Self {
-        Self
+        Self(Arc::clone(&self.0))
     }
 }
 
@@ -46,13 +46,18 @@ impl rustest::FixtureBuilder for TempFileBuilder {
     where
         Self: Sized,
     {
-        vec![Self]
+        vec![Self(Arc::new(OnceLock::new()))]
     }
 
     fn build(&self) -> rustest::FixtureCreationResult<Self::Fixt> {
-        Ok(TempFile(
-            tempfile::NamedTempFile::new_in(std::env::temp_dir())
-                .map_err(|e| rustest::FixtureCreationError::new("TempFile", e))?,
-        ))
+        self.0
+            .get_or_init(|| {
+                tempfile::NamedTempFile::new_in(std::env::temp_dir())
+                    .map(|f| Arc::new(f))
+                    .map_err(|e| rustest::FixtureCreationError::new("TempFile", e))
+            })
+            .as_ref()
+            .map(|tmp| TempFile(Arc::clone(tmp)))
+            .map_err(|e| e.clone())
     }
 }

@@ -232,27 +232,19 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             type SubBuilders =  #sub_builder_types_tuple;
             const SCOPE: ::rustest::FixtureScope = #scope;
 
-            fn setup_matrix(
-                ctx: &mut ::rustest::TestContext
-            ) -> Vec<::rustest::BuilderCombination<Self::SubBuilders>> {
-                use ::rustest::FixtureBuilder;
-                let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_builders::setup(ctx)))*;
-                fixtures_matrix.flatten()
-            }
             fn build_fixt(
                 #sub_fixtures_call_args : ::rustest::CallArgs<Self::SubFixtures>,
             ) -> ::rustest::FixtureCreationResult<<Self::Fixt as ::rustest::Fixture>::Type> {
                 use ::rustest::FixtureBuilder;
                 #use_param
+
                 fn user_provided_setup #fixture_generics (#sig_inputs) #builder_output #where_clause
                 #block
-                // This is a lambda which call the initial impl of the fixture and transform the (#fixture_type) into a
-                // `Resutl<#fixture_type, >` if this is not already a `Result`.
-                let user_provided_setup_as_result = |#(#sub_fixtures_inputs),*| {
-                    let result = user_provided_setup(#(#sub_fixtures_inputs),*);
-                    #convert_result
-                };
-                user_provided_setup_as_result(#(#sub_fixtures_inputs),*)
+
+                let result = user_provided_setup(#(#sub_fixtures_inputs),*);
+                // Transform the (#fixture_type) into a `Result<#fixture_type, _>` if it is not
+                // already a `Result`.
+                #convert_result
             }
 
             fn teardown() -> Option<std::sync::Arc<::rustest::TeardownFn<<Self::Fixt as ::rustest::Fixture>::Type>>> {
@@ -269,17 +261,14 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             type Builder = ::rustest::Builder<#def_name #ty_generics>;
         }
 
-        impl #impl_generics ::rustest::SubFixture for #fixture_name #ty_generics #where_clause {
-        }
-
-        impl #impl_generics ::rustest::BuildableFixture for #fixture_name #ty_generics #where_clause {
-            fn new(inner : ::rustest::SharedFixtureValue<Self::Type>) -> Self {
+        impl #impl_generics From<#inner_type> for #fixture_name #ty_generics #where_clause {
+            fn from(inner : #inner_type) -> Self {
                 Self{
                     inner,
                     #(#phantom_builders),*
                 }
             }
-         }
+        }
 
         impl #impl_generics ::std::ops::Deref for #fixture_name #ty_generics #where_clause {
             type Target = <Self as ::rustest::Fixture>::Type;

@@ -3,18 +3,24 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{
-    BuildableFixture, BuilderCall, BuilderCombination, CallArgs, Duplicate, Fixture,
-    FixtureBuilder, FixtureCreationResult, FixtureScope, LazyValue, SharedFixtureValue, TeardownFn,
-    TestName,
+use super::{
+    fixture::{
+        Fixture, FixtureBuilder, FixtureCreationResult, FixtureScope, LazyValue,
+        SharedFixtureValue, TeardownFn,
+    },
+    fixture_matrix::{
+        BuilderCall, BuilderCombination, CallArgs, Duplicate, FixtureMatrix, MatrixSetup,
+    },
+    test_name::TestName,
 };
 
+/// The definition of a fixture, use by Builder to implement FixtureBuilder.
+#[doc(hidden)]
 pub trait FixtureDef {
-    type Fixt: BuildableFixture;
+    type Fixt: Fixture;
     type SubFixtures;
     type SubBuilders;
     const SCOPE: FixtureScope;
-    fn setup_matrix(ctx: &mut crate::TestContext) -> Vec<BuilderCombination<Self::SubBuilders>>;
 
     fn build_fixt(
         args: CallArgs<Self::SubFixtures>,
@@ -28,6 +34,7 @@ type InnerLazy<Def> = LazyValue<
     <Def as FixtureDef>::SubBuilders,
 >;
 
+#[doc(hidden)]
 pub struct Builder<Def: FixtureDef> {
     inner: Arc<Mutex<InnerLazy<Def>>>,
     name: Option<String>,
@@ -68,6 +75,8 @@ where
 impl<Def: FixtureDef + 'static> FixtureBuilder for Builder<Def>
 where
     BuilderCombination<Def::SubBuilders>: TestName + BuilderCall<Def::SubFixtures>,
+    FixtureMatrix<Def::SubBuilders>: MatrixSetup<Def::SubBuilders>,
+    Def::Fixt: From<SharedFixtureValue<<Def::Fixt as Fixture>::Type>>,
 {
     type Fixt = Def::Fixt;
     type Type = <Def::Fixt as Fixture>::Type;
@@ -78,7 +87,7 @@ where
             return b;
         }
         // We have to call this function for each combination of its fixtures.
-        let builders = Def::setup_matrix(ctx);
+        let builders = FixtureMatrix::<Def::SubBuilders>::setup(ctx);
         let inners = builders
             .into_iter()
             .map(|b| Self::new(b))
@@ -100,6 +109,6 @@ where
                 ))
             })?
             .clone();
-        Ok(Self::Fixt::new(inner))
+        Ok(inner.into())
     }
 }

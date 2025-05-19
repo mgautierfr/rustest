@@ -43,7 +43,6 @@ impl<Source: SubFixture> rustest::Fixture for Global<Source> {
     type Builder = GlobalBuilder<Source>;
 }
 
-#[derive(Debug)]
 // Duplicated `Source::Builder` already handle the inner cache on the value,
 // So we don't need to have a Rc or else.
 pub struct GlobalBuilder<Source: SubFixture>(Source::Builder);

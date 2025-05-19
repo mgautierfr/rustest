@@ -1,9 +1,15 @@
-use std::cmp::PartialEq;
+use std::{cmp::PartialEq, sync::Arc};
 
-use super::{FixtureBuilder, FixtureCreationResult, TestName};
+use super::{
+    fixture::{FixtureBuilder, FixtureCreationResult},
+    test::TestContext,
+    test_name::TestName,
+};
 
+#[doc(hidden)]
 pub struct CallArgs<Types>(pub Types);
 
+#[doc(hidden)]
 pub struct BuilderCombination<KnownType>(KnownType);
 
 impl<KnownType> PartialEq<KnownType> for BuilderCombination<KnownType>
@@ -89,10 +95,15 @@ impl_fixture_combination_call!(
 ///
 /// `FixtureMatrix` is used to manage a collection of fixtures.
 /// It acts as an increasing matrix of dimension N as we feed it with new fixtures vector.
+#[doc(hidden)]
 #[derive(Default)]
 pub struct FixtureMatrix<BuildersTypes> {
     builders: BuildersTypes,
     multiple: bool,
+}
+
+pub trait MatrixSetup<SubBuilders> {
+    fn setup(_ctx: &mut TestContext) -> Vec<BuilderCombination<SubBuilders>>;
 }
 
 impl<T> FixtureMatrix<T> {
@@ -132,6 +143,12 @@ impl FixtureMatrix<()> {
 
     /// Call the function f... with no fixture as this FixtureMatrix is dimension 0.
     pub fn flatten(self) -> Vec<BuilderCombination<()>> {
+        vec![BuilderCombination(())]
+    }
+}
+
+impl MatrixSetup<()> for FixtureMatrix<()> {
+    fn setup(_ctx: &mut TestContext) -> Vec<BuilderCombination<()>> {
         vec![BuilderCombination(())]
     }
 }
@@ -212,6 +229,12 @@ impl<T: Duplicate> Duplicate for Vec<T> {
     }
 }
 
+impl<T: Duplicate> Duplicate for Arc<T> {
+    fn duplicate(&self) -> Self {
+        Arc::clone(self)
+    }
+}
+
 macro_rules! iter_builder {
     (@call $collect:expr ; $last_name:ident ; $last_builder:expr ; ) => {
         for $last_name in $last_builder.iter() {
@@ -238,6 +261,15 @@ macro_rules! iter_builder {
 }
 
 macro_rules! impl_fixture_call {
+    (@builder_setup, $fixture_matrix:expr, $ctx:expr, $builder:ident) => {{
+        let fixture_matrix = $fixture_matrix.feed($builder::setup($ctx));
+        fixture_matrix.flatten()
+    }};
+    (@builder_setup, $fixture_matrix:expr, $ctx:expr, $builder:ident, $($types:tt),+) => {{
+        let fixture_matrix = $fixture_matrix.feed($builder::setup($ctx));
+        impl_fixture_call!(@builder_setup, fixture_matrix, $ctx, $($types),+)
+    }};
+
     (($($types:tt),+), ($($bnames:ident),+), ($($fnames:ident),+)) => {
 
         impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
@@ -249,6 +281,16 @@ macro_rules! impl_fixture_call {
                 let mut output = vec![];
                 iter_builder!(@call output ; $($fnames),+ ; $($bnames),+ ;);
                 output
+            }
+        }
+
+
+        impl<$($types),+> MatrixSetup<($($types),+,)> for FixtureMatrix<($($types),+,)> where
+            $($types : Duplicate + FixtureBuilder + TestName + 'static),+ ,
+        {
+            fn setup(ctx: &mut TestContext) -> Vec<BuilderCombination<($($types),+,)>> {
+                let fixture_matrix = FixtureMatrix::new();
+                impl_fixture_call!(@builder_setup, fixture_matrix, ctx, $($types),+)
             }
         }
     }
@@ -354,10 +396,8 @@ impl_fixture_feed!(
 
 #[cfg(test)]
 mod tests {
-    use core::{option::Option::None, unimplemented};
-
     use super::*;
-    use crate::{Duplicate, Fixture, FixtureBuilder, FixtureRegistry, FixtureScope, TestContext};
+    use crate::{Fixture, FixtureRegistry, FixtureScope, TestContext};
 
     struct DummyFixture<T>(T);
 
