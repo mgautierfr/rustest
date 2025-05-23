@@ -99,6 +99,24 @@ impl ParamName for String {
     }
 }
 
+impl ParamName for &[u8] {
+    fn param_name(&self) -> String {
+        use std::fmt::Write;
+        let mut s = "[".to_owned();
+        for &bytes in self.iter() {
+            write!(&mut s, "{bytes:02X}").expect("Unable to write in string");
+        }
+        write!(&mut s, "]").expect("Unable to write in string");
+        s
+    }
+}
+
+impl<const N: usize> ParamName for [u8; N] {
+    fn param_name(&self) -> String {
+        self.as_slice().param_name()
+    }
+}
+
 impl<T: ParamName> ParamName for Vec<T> {
     fn param_name(&self) -> String {
         let vec = self.iter().map(|v| v.param_name()).collect::<Vec<_>>();
@@ -258,6 +276,23 @@ mod tests {
         assert_eq!("\u{0065}\u{0301}".param_name(), "e\u{301}".to_owned());
         assert_eq!("\u{0065}\u{0301}".param_name(), "é".to_owned());
         assert_eq!("💯 love: ❤".param_name(), "💯 love: ❤".to_owned());
+    }
+
+    #[test]
+    fn test_bytes() {
+        assert_eq!([0x00, 0x50, 0xBB].param_name(), "[0050BB]".to_owned());
+        assert_eq!(b"a".param_name(), "[61]".to_owned());
+        assert_eq!(b"+".param_name(), "[2B]".to_owned());
+        assert_eq!("é".as_bytes().param_name(), "[C3A9]".to_owned());
+        // This is the letter 'e' followed by a acute accent
+        assert_eq!("é".as_bytes().param_name(), "[65CC81]".to_owned());
+        // The same thing, but directly as utf8
+        assert_eq!(b"\x65\xcc\x81".param_name(), "[65CC81]".to_owned());
+        assert_eq!(b"\x65\xcc\x81".param_name(), "[65CC81]".to_owned());
+        assert_eq!(
+            "💯 love: ❤".as_bytes().param_name(),
+            "[F09F92AF206C6F76653A20E29DA4]".to_owned()
+        );
     }
 
     #[test]
