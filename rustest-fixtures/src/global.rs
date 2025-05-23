@@ -80,10 +80,7 @@ impl<Source: SubFixture> rustest::FixtureBuilder for GlobalBuilder<Source> {
         builders
     }
 
-    fn build(&self) -> rustest::FixtureCreationResult<Self::Fixt>
-    where
-        Self: Sized,
-    {
+    fn build(&self) -> rustest::FixtureCreationResult<Self::Fixt> {
         Ok(Global(self.0.build()?))
     }
 }

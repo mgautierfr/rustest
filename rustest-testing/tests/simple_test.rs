@@ -5,13 +5,13 @@ use std::sync::LazyLock;
 
 fn run(options: Option<&[&str]>) -> std::io::Result<std::process::Output> {
     let exec = env!("CARGO_BIN_EXE_simple_test");
-    let mut command = std::process::Command::new(&exec);
+    let mut command = std::process::Command::new(exec);
     command.env("NO_COLOR", "1");
-    options.map(|options| {
+    if let Some(options) = options {
         for opt in options {
             command.arg(opt);
         }
-    });
+    };
     command.output()
 }
 
@@ -98,20 +98,18 @@ impl TestCollector {
                     String::from_utf8_lossy(line)
                 );
             }
-        } else {
-            if count != 0 {
-                eprintln!("Stdout : {}", String::from_utf8_lossy(&self.output.stdout));
-                eprintln!("Stderr : {}", String::from_utf8_lossy(&self.output.stderr));
-                panic!(
-                    "Check failed: Expected no line {}",
-                    String::from_utf8_lossy(line)
-                );
-            }
+        } else if count != 0 {
+            eprintln!("Stdout : {}", String::from_utf8_lossy(&self.output.stdout));
+            eprintln!("Stderr : {}", String::from_utf8_lossy(&self.output.stderr));
+            panic!(
+                "Check failed: Expected no line {}",
+                String::from_utf8_lossy(line)
+            );
         }
     }
     fn check_end(&mut self, result: TestResult) {
         assert_eq!(self.result, result);
-        if self.counter.len() != 0 {
+        if !self.counter.is_empty() {
             let count = self.counter.len();
             let left_over = self
                 .counter
