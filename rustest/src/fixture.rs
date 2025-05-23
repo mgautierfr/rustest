@@ -7,7 +7,6 @@ use std::{
     any::{Any, TypeId},
     default::Default,
     ops::Deref,
-    panic::{RefUnwindSafe, UnwindSafe},
     sync::Arc,
 };
 
@@ -199,7 +198,7 @@ impl FixtureRegistry {
 /// A type alias for a teardown function.
 ///
 /// The teardown function is called when the fixture is dropped to clean up resources.
-pub type TeardownFn<T> = dyn Fn(&mut T) + Send + RefUnwindSafe + UnwindSafe + Sync;
+pub type TeardownFn<T> = dyn Fn(&mut T) + Send + Sync;
 
 /// A struct that manages the teardown of a fixture.
 ///
