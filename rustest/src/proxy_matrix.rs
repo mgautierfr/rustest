@@ -93,11 +93,11 @@ impl_fixture_combination_call!(
 
 /// A matrix of fixtures.
 ///
-/// `FixtureMatrix` is used to manage a collection of fixtures.
+/// `ProxyMatrix` is used to manage a collection of fixtures.
 /// It acts as an increasing matrix of dimension N as we feed it with new fixtures vector.
 #[doc(hidden)]
 #[derive(Default)]
-pub struct FixtureMatrix<ProxiesTypes> {
+pub struct ProxyMatrix<ProxiesTypes> {
     proxies: ProxiesTypes,
     multiple: bool,
 }
@@ -106,15 +106,15 @@ pub trait MatrixSetup<SubProxies> {
     fn setup(_ctx: &mut TestContext) -> Vec<ProxyCombination<SubProxies>>;
 }
 
-impl<T> FixtureMatrix<T> {
-    /// Does the FixtureMatrix as multiple combination ?
+impl<T> ProxyMatrix<T> {
+    /// Does the ProxyMatrix as multiple combination ?
     pub fn is_multiple(&self) -> bool {
         self.multiple
     }
 }
 
-impl FixtureMatrix<()> {
-    /// Creates a new `FixtureMatrix` with 0 dimension.
+impl ProxyMatrix<()> {
+    /// Creates a new `ProxyMatrix` with 0 dimension.
     pub fn new() -> Self {
         Self {
             proxies: (),
@@ -123,7 +123,7 @@ impl FixtureMatrix<()> {
     }
 }
 
-impl FixtureMatrix<()> {
+impl ProxyMatrix<()> {
     /// Feeds new fixtures into the matrix.
     ///
     /// # Arguments
@@ -132,22 +132,22 @@ impl FixtureMatrix<()> {
     ///
     /// # Returns
     ///
-    /// A new `FixtureMatrix` of dimension 1 containing the fed fixtures.
-    pub fn feed<T>(self, new_fixs: Vec<T>) -> FixtureMatrix<(Vec<T>,)> {
+    /// A new `ProxyMatrix` of dimension 1 containing the fed fixtures.
+    pub fn feed<T>(self, new_fixs: Vec<T>) -> ProxyMatrix<(Vec<T>,)> {
         let multiple = self.multiple || new_fixs.len() > 1;
-        FixtureMatrix {
+        ProxyMatrix {
             proxies: (new_fixs,),
             multiple,
         }
     }
 
-    /// Call the function f... with no fixture as this FixtureMatrix is dimension 0.
+    /// Call the function f... with no fixture as this ProxyMatrix is dimension 0.
     pub fn flatten(self) -> Vec<ProxyCombination<()>> {
         vec![ProxyCombination(())]
     }
 }
 
-impl MatrixSetup<()> for FixtureMatrix<()> {
+impl MatrixSetup<()> for ProxyMatrix<()> {
     fn setup(_ctx: &mut TestContext) -> Vec<ProxyCombination<()>> {
         vec![ProxyCombination(())]
     }
@@ -261,18 +261,18 @@ macro_rules! iter_proxy {
 }
 
 macro_rules! impl_fixture_call {
-    (@proxy_setup, $fixture_matrix:expr, $ctx:expr, $proxy:ident) => {{
-        let fixture_matrix = $fixture_matrix.feed($proxy::setup($ctx));
-        fixture_matrix.flatten()
+    (@proxy_setup, $proxy_matrix:expr, $ctx:expr, $proxy:ident) => {{
+        let proxy_matrix = $proxy_matrix.feed($proxy::setup($ctx));
+        proxy_matrix.flatten()
     }};
-    (@proxy_setup, $fixture_matrix:expr, $ctx:expr, $proxy:ident, $($types:tt),+) => {{
-        let fixture_matrix = $fixture_matrix.feed($proxy::setup($ctx));
-        impl_fixture_call!(@proxy_setup, fixture_matrix, $ctx, $($types),+)
+    (@proxy_setup, $proxy_matrix:expr, $ctx:expr, $proxy:ident, $($types:tt),+) => {{
+        let proxy_matrix = $proxy_matrix.feed($proxy::setup($ctx));
+        impl_fixture_call!(@proxy_setup, proxy_matrix, $ctx, $($types),+)
     }};
 
     (($($types:tt),+), ($($bnames:ident),+), ($($fnames:ident),+)) => {
 
-        impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
+        impl<$($types),+> ProxyMatrix<($(Vec<$types>),+,)> where
             $($types : Duplicate + TestName + 'static),+ ,
         {
             pub fn flatten(self) -> Vec<ProxyCombination<($($types),+,)>>
@@ -285,12 +285,12 @@ macro_rules! impl_fixture_call {
         }
 
 
-        impl<$($types),+> MatrixSetup<($($types),+,)> for FixtureMatrix<($($types),+,)> where
+        impl<$($types),+> MatrixSetup<($($types),+,)> for ProxyMatrix<($($types),+,)> where
             $($types : Duplicate + FixtureProxy + TestName + 'static),+ ,
         {
             fn setup(ctx: &mut TestContext) -> Vec<ProxyCombination<($($types),+,)>> {
-                let fixture_matrix = FixtureMatrix::new();
-                impl_fixture_call!(@proxy_setup, fixture_matrix, ctx, $($types),+)
+                let proxy_matrix = ProxyMatrix::new();
+                impl_fixture_call!(@proxy_setup, proxy_matrix, ctx, $($types),+)
             }
         }
     }
@@ -343,7 +343,7 @@ impl_fixture_call!(
 
 macro_rules! impl_fixture_feed {
     (($($types:tt),+), ($($names:ident),+)) => {
-        impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
+        impl<$($types),+> ProxyMatrix<($(Vec<$types>),+,)> where
             $($types : TestName + 'static),+ ,
         {
 
@@ -355,12 +355,12 @@ macro_rules! impl_fixture_feed {
             ///
             /// # Returns
             ///
-            /// A new `FixtureMatrix` containing the fed fixtures.
-            pub fn feed<T>(self, new_fixs: Vec<T>) -> FixtureMatrix<($(Vec<$types>),+ ,Vec<T>)> {
+            /// A new `ProxyMatrix` containing the fed fixtures.
+            pub fn feed<T>(self, new_fixs: Vec<T>) -> ProxyMatrix<($(Vec<$types>),+ ,Vec<T>)> {
                 let multiple = self.multiple || new_fixs.len() > 1;
                                 let ($($names),+, ) = self.proxies;
                                 let proxies = ($($names),+ , new_fixs);
-                FixtureMatrix { proxies, multiple }
+                ProxyMatrix { proxies, multiple }
             }
         }
     };
@@ -465,8 +465,8 @@ mod tests {
     }
 
     #[test]
-    fn test_fixture_matrix() {
-        let matrix = FixtureMatrix::new()
+    fn test_proxy_matrix() {
+        let matrix = ProxyMatrix::new()
             .feed(vec![
                 DummyFixtureProxy(1),
                 DummyFixtureProxy(2),
@@ -489,7 +489,7 @@ mod tests {
 
     #[test]
     fn test_matrix_caller() {
-        let matrix = FixtureMatrix::new().feed(vec![
+        let matrix = ProxyMatrix::new().feed(vec![
             DummyFixtureProxy(1),
             DummyFixtureProxy(2),
             DummyFixtureProxy(3),
@@ -511,7 +511,7 @@ mod tests {
 
     #[test]
     fn test_matrix_caller_dim3() {
-        let matrix = FixtureMatrix::new().feed(vec![
+        let matrix = ProxyMatrix::new().feed(vec![
             DummyFixtureProxy(1),
             DummyFixtureProxy(2),
             DummyFixtureProxy(3),

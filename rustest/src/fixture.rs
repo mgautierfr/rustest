@@ -1,5 +1,5 @@
 use super::{
-    fixture_matrix::{CallArgs, Duplicate, ProxyCall, ProxyCombination},
+    proxy_matrix::{CallArgs, Duplicate, ProxyCall, ProxyCombination},
     test::TestContext,
     test_name::TestName,
 };

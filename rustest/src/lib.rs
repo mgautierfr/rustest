@@ -117,8 +117,8 @@
 //! ```
 
 mod fixture;
-mod fixture_matrix;
 mod fixture_proxy;
+mod proxy_matrix;
 mod test;
 mod test_name;
 use fixture::FixtureRegistry;
@@ -128,11 +128,11 @@ pub use fixture::{
     Fixture, FixtureCreationError, FixtureCreationResult, FixtureProxy, FixtureScope, SubFixture,
     TeardownFn,
 };
-pub use fixture_matrix::Duplicate;
-#[doc(hidden)]
-pub use fixture_matrix::{CallArgs, FixtureMatrix, ProxyCall, ProxyCombination};
 #[doc(hidden)]
 pub use fixture_proxy::{FixtureDef, Proxy};
+pub use proxy_matrix::Duplicate;
+#[doc(hidden)]
+pub use proxy_matrix::{CallArgs, ProxyCall, ProxyCombination, ProxyMatrix};
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError, TestGenerator, TestRunner};
 pub use test::{Result, Test, TestContext};

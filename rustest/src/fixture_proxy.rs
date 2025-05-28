@@ -8,9 +8,7 @@ use super::{
         Fixture, FixtureCreationResult, FixtureProxy, FixtureScope, LazyValue, SharedFixtureValue,
         TeardownFn,
     },
-    fixture_matrix::{
-        CallArgs, Duplicate, FixtureMatrix, MatrixSetup, ProxyCall, ProxyCombination,
-    },
+    proxy_matrix::{CallArgs, Duplicate, MatrixSetup, ProxyCall, ProxyCombination, ProxyMatrix},
     test_name::TestName,
 };
 
@@ -75,7 +73,7 @@ where
 impl<Def: FixtureDef + 'static> FixtureProxy for Proxy<Def>
 where
     ProxyCombination<Def::SubProxies>: TestName + ProxyCall<Def::SubFixtures>,
-    FixtureMatrix<Def::SubProxies>: MatrixSetup<Def::SubProxies>,
+    ProxyMatrix<Def::SubProxies>: MatrixSetup<Def::SubProxies>,
     Def::Fixt: From<SharedFixtureValue<<Def::Fixt as Fixture>::Type>>,
 {
     type Fixt = Def::Fixt;
@@ -86,7 +84,7 @@ where
             return b;
         }
         // We have to call this function for each combination of its fixtures.
-        let proxies = FixtureMatrix::<Def::SubProxies>::setup(ctx);
+        let proxies = ProxyMatrix::<Def::SubProxies>::setup(ctx);
         let inners = proxies
             .into_iter()
             .map(|b| Self::new(b))
