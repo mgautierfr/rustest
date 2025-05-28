@@ -21,7 +21,7 @@ fn test_global_1(number: Global<IncNumber>) {
 }
 
 fn run(options: Option<&[&str]>) -> std::io::Result<std::process::Output> {
-    let exec = env!("CARGO_BIN_EXE_global_test");
+    let exec = env!("CARGO_BIN_EXE_scope_test");
     let mut command = std::process::Command::new(exec);
     command.env("NO_COLOR", "1");
     if let Some(options) = options {
