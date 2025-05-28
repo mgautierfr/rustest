@@ -165,11 +165,11 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         .map(TokenStream::from);
 
     let FixtureInfo {
-        sub_fixtures_builders,
+        sub_fixtures_proxies,
         sub_fixtures,
         sub_fixtures_inputs,
     } = gen_fixture_call(&sig, Some(&mod_name))?;
-    let sub_builder_types_tuple = to_tuple(&sub_fixtures_builders);
+    let sub_proxy_types_tuple = to_tuple(&sub_fixtures_proxies);
     let sub_fixtures_tuple = to_tuple(&sub_fixtures);
     let sub_fixtures_call_args = to_call_args(&sub_fixtures_inputs);
     let param_fixture_def = gen_param_fixture(&args.params, Some(fixture_name));
@@ -224,19 +224,19 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         } // end of inner mod
 
         #vis struct #def_name #fixture_generics #where_clause {
-            #(#phantom_markers),*
-        }
+                #(#phantom_markers),*
+            }
 
         impl #impl_generics ::rustest::FixtureDef for #def_name #ty_generics #where_clause {
             type Fixt = #fixture_name #ty_generics;
             type SubFixtures = #sub_fixtures_tuple;
-            type SubBuilders =  #sub_builder_types_tuple;
+            type SubProxies =  #sub_proxy_types_tuple;
             const SCOPE: ::rustest::FixtureScope = #scope;
 
             fn build_fixt(
                 #sub_fixtures_call_args : ::rustest::CallArgs<Self::SubFixtures>,
             ) -> ::rustest::FixtureCreationResult<<Self::Fixt as ::rustest::Fixture>::Type> {
-                use ::rustest::FixtureBuilder;
+                use ::rustest::FixtureProxy;
                 #use_param
 
                 fn user_provided_setup #fixture_generics (#sig_inputs) #builder_output #where_clause
@@ -259,7 +259,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         }
         impl #impl_generics ::rustest::Fixture for #fixture_name #ty_generics #where_clause {
             type Type = #fixture_type;
-            type Builder = ::rustest::Builder<#def_name #ty_generics>;
+            type Proxy = ::rustest::Proxy<#def_name #ty_generics>;
         }
 
         impl #impl_generics From<#inner_type> for #fixture_name #ty_generics #where_clause {

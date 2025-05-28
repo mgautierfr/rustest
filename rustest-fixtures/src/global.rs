@@ -40,26 +40,26 @@ impl<Source: SubFixture> std::ops::Deref for Global<Source> {
 
 impl<Source: SubFixture> rustest::Fixture for Global<Source> {
     type Type = Source::Type;
-    type Builder = GlobalBuilder<Source>;
+    type Proxy = GlobalProxy<Source>;
 }
 
-// Duplicated `Source::Builder` already handle the inner cache on the value,
+// Duplicated `Source::Proxy` already handle the inner cache on the value,
 // So we don't need to have a Rc or else.
-pub struct GlobalBuilder<Source: SubFixture>(Source::Builder);
+pub struct GlobalProxy<Source: SubFixture>(Source::Proxy);
 
-impl<Source: SubFixture> rustest::Duplicate for GlobalBuilder<Source> {
+impl<Source: SubFixture> rustest::Duplicate for GlobalProxy<Source> {
     fn duplicate(&self) -> Self {
         Self(self.0.duplicate())
     }
 }
 
-impl<Source: SubFixture> rustest::TestName for GlobalBuilder<Source> {
+impl<Source: SubFixture> rustest::TestName for GlobalProxy<Source> {
     fn name(&self) -> Option<String> {
         self.0.name()
     }
 }
 
-impl<Source: SubFixture> rustest::FixtureBuilder for GlobalBuilder<Source> {
+impl<Source: SubFixture> rustest::FixtureProxy for GlobalProxy<Source> {
     type Fixt = Global<Source>;
     const SCOPE: rustest::FixtureScope = rustest::FixtureScope::Global;
 
@@ -70,13 +70,13 @@ impl<Source: SubFixture> rustest::FixtureBuilder for GlobalBuilder<Source> {
         if let Some(b) = ctx.get() {
             return b;
         }
-        let builders: Vec<_> = Source::Builder::setup(ctx)
+        let proxies: Vec<_> = Source::Proxy::setup(ctx)
             .into_iter()
             .map(|b| Self(b))
             .collect();
 
-        ctx.add::<Self>(builders.duplicate());
-        builders
+        ctx.add::<Self>(proxies.duplicate());
+        proxies
     }
 
     fn build(self) -> rustest::FixtureCreationResult<Self::Fixt> {

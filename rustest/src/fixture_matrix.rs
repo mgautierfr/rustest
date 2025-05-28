@@ -1,7 +1,7 @@
 use std::{cmp::PartialEq, sync::Arc};
 
 use super::{
-    fixture::{FixtureBuilder, FixtureCreationResult},
+    fixture::{FixtureCreationResult, FixtureProxy},
     test::TestContext,
     test_name::TestName,
 };
@@ -10,9 +10,9 @@ use super::{
 pub struct CallArgs<Types>(pub Types);
 
 #[doc(hidden)]
-pub struct BuilderCombination<KnownType>(KnownType);
+pub struct ProxyCombination<KnownType>(KnownType);
 
-impl<KnownType> PartialEq<KnownType> for BuilderCombination<KnownType>
+impl<KnownType> PartialEq<KnownType> for ProxyCombination<KnownType>
 where
     KnownType: PartialEq,
 {
@@ -21,7 +21,7 @@ where
     }
 }
 
-pub trait BuilderCall<Args> {
+pub trait ProxyCall<Args> {
     fn call<F, Output>(self, f: F) -> FixtureCreationResult<Output>
     where
         F: FnOnce(CallArgs<Args>) -> FixtureCreationResult<Output>;
@@ -29,7 +29,7 @@ pub trait BuilderCall<Args> {
 
 macro_rules! impl_fixture_combination_call {
     ((), ()) => {
-        impl BuilderCall<()> for BuilderCombination<()> where
+        impl ProxyCall<()> for ProxyCombination<()> where
         {
             fn call<F, Output>(
                 self,
@@ -44,8 +44,8 @@ macro_rules! impl_fixture_combination_call {
     };
     (($($types:tt),+), ($($names:ident),+)) => {
 
-        impl<$($types),+> BuilderCall<($($types::Fixt),+,)> for BuilderCombination<($($types),+,)> where
-            $($types : FixtureBuilder + 'static),+ ,
+        impl<$($types),+> ProxyCall<($($types::Fixt),+,)> for ProxyCombination<($($types),+,)> where
+            $($types : FixtureProxy + 'static),+ ,
         {
             fn call<F, Output>(
                 self,
@@ -97,13 +97,13 @@ impl_fixture_combination_call!(
 /// It acts as an increasing matrix of dimension N as we feed it with new fixtures vector.
 #[doc(hidden)]
 #[derive(Default)]
-pub struct FixtureMatrix<BuildersTypes> {
-    builders: BuildersTypes,
+pub struct FixtureMatrix<ProxiesTypes> {
+    proxies: ProxiesTypes,
     multiple: bool,
 }
 
-pub trait MatrixSetup<SubBuilders> {
-    fn setup(_ctx: &mut TestContext) -> Vec<BuilderCombination<SubBuilders>>;
+pub trait MatrixSetup<SubProxies> {
+    fn setup(_ctx: &mut TestContext) -> Vec<ProxyCombination<SubProxies>>;
 }
 
 impl<T> FixtureMatrix<T> {
@@ -117,7 +117,7 @@ impl FixtureMatrix<()> {
     /// Creates a new `FixtureMatrix` with 0 dimension.
     pub fn new() -> Self {
         Self {
-            builders: (),
+            proxies: (),
             multiple: false,
         }
     }
@@ -136,26 +136,26 @@ impl FixtureMatrix<()> {
     pub fn feed<T>(self, new_fixs: Vec<T>) -> FixtureMatrix<(Vec<T>,)> {
         let multiple = self.multiple || new_fixs.len() > 1;
         FixtureMatrix {
-            builders: (new_fixs,),
+            proxies: (new_fixs,),
             multiple,
         }
     }
 
     /// Call the function f... with no fixture as this FixtureMatrix is dimension 0.
-    pub fn flatten(self) -> Vec<BuilderCombination<()>> {
-        vec![BuilderCombination(())]
+    pub fn flatten(self) -> Vec<ProxyCombination<()>> {
+        vec![ProxyCombination(())]
     }
 }
 
 impl MatrixSetup<()> for FixtureMatrix<()> {
-    fn setup(_ctx: &mut TestContext) -> Vec<BuilderCombination<()>> {
-        vec![BuilderCombination(())]
+    fn setup(_ctx: &mut TestContext) -> Vec<ProxyCombination<()>> {
+        vec![ProxyCombination(())]
     }
 }
 
 macro_rules! impl_fixture_test_name {
     ((), ()) => {
-        impl TestName for BuilderCombination<()>
+        impl TestName for ProxyCombination<()>
         {
             fn name(&self) -> Option<String> {
                 None
@@ -163,7 +163,7 @@ macro_rules! impl_fixture_test_name {
         }
     };
     (($($types:tt),+), ($($names:ident),+)) => {
-        impl< $($types),+ > TestName for BuilderCombination<($($types),+,)>
+        impl< $($types),+ > TestName for ProxyCombination<($($types),+,)>
            where
                 $($types : TestName),+ ,
         {
@@ -214,9 +214,9 @@ impl_fixture_test_name!(
 
 /// Duplicate trait is really closed to Clone trait but with slightly sementic difference.
 ///
-/// Duplicated builders must produce the **SAME** fitxure. `Clone` trait do not provide
+/// Duplicated proxies must produce the **SAME** fitxure. `Clone` trait do not provide
 /// this sementics.
-/// Producing the same value implies builders should have some kind of shared cache
+/// Producing the same value implies proxies should have some kind of shared cache
 /// (using Rc or Arc) (btw, Rc + Clone is kind of Duplicate).
 pub trait Duplicate {
     /// Duplicate the value.
@@ -235,39 +235,39 @@ impl<T: Duplicate> Duplicate for Arc<T> {
     }
 }
 
-macro_rules! iter_builder {
-    (@call $collect:expr ; $last_name:ident ; $last_builder:expr ; ) => {
-        for $last_name in $last_builder.iter() {
-            let combination = BuilderCombination(($last_name.duplicate(), ));
+macro_rules! iter_proxy {
+    (@call $collect:expr ; $last_name:ident ; $last_proxy:expr ; ) => {
+        for $last_name in $last_proxy.iter() {
+            let combination = ProxyCombination(($last_name.duplicate(), ));
             $collect.push(combination)
         }
     };
-    (@call $collect:expr ; $last_name:ident ; $last_builder:expr ; $($known:tt),*) => {
-        for $last_name in $last_builder.iter() {
-            let combination = BuilderCombination(($($known.duplicate()),*, $last_name.duplicate()));
+    (@call $collect:expr ; $last_name:ident ; $last_proxy:expr ; $($known:tt),*) => {
+        for $last_name in $last_proxy.iter() {
+            let combination = ProxyCombination(($($known.duplicate()),*, $last_name.duplicate()));
             $collect.push(combination)
         }
     };
-    (@call $collect:expr ; $first_name:tt, $($other_names:ident),* ; $first_builder:expr, $($other_builders:expr),* ; ) => {
-        for $first_name in $first_builder.iter() {
-            iter_builder!(@call $collect ; $($other_names),* ; $($other_builders),* ; $first_name)
+    (@call $collect:expr ; $first_name:tt, $($other_names:ident),* ; $first_proxy:expr, $($other_proxies:expr),* ; ) => {
+        for $first_name in $first_proxy.iter() {
+            iter_proxy!(@call $collect ; $($other_names),* ; $($other_proxies),* ; $first_name)
         }
     };
-    (@call $collect:expr ; $first_name:tt, $($other_names:ident),* ; $first_builder:expr, $($other_builders:expr),* ; $($known:expr),*) => {
-        for $first_name in $first_builder.iter() {
-            iter_builder!(@call $collect ; $($other_names),* ; $($other_builders),* ; $($known),* , $first_name)
+    (@call $collect:expr ; $first_name:tt, $($other_names:ident),* ; $first_proxy:expr, $($other_proxies:expr),* ; $($known:expr),*) => {
+        for $first_name in $first_proxy.iter() {
+            iter_proxy!(@call $collect ; $($other_names),* ; $($other_proxies),* ; $($known),* , $first_name)
         }
     };
 }
 
 macro_rules! impl_fixture_call {
-    (@builder_setup, $fixture_matrix:expr, $ctx:expr, $builder:ident) => {{
-        let fixture_matrix = $fixture_matrix.feed($builder::setup($ctx));
+    (@proxy_setup, $fixture_matrix:expr, $ctx:expr, $proxy:ident) => {{
+        let fixture_matrix = $fixture_matrix.feed($proxy::setup($ctx));
         fixture_matrix.flatten()
     }};
-    (@builder_setup, $fixture_matrix:expr, $ctx:expr, $builder:ident, $($types:tt),+) => {{
-        let fixture_matrix = $fixture_matrix.feed($builder::setup($ctx));
-        impl_fixture_call!(@builder_setup, fixture_matrix, $ctx, $($types),+)
+    (@proxy_setup, $fixture_matrix:expr, $ctx:expr, $proxy:ident, $($types:tt),+) => {{
+        let fixture_matrix = $fixture_matrix.feed($proxy::setup($ctx));
+        impl_fixture_call!(@proxy_setup, fixture_matrix, $ctx, $($types),+)
     }};
 
     (($($types:tt),+), ($($bnames:ident),+), ($($fnames:ident),+)) => {
@@ -275,22 +275,22 @@ macro_rules! impl_fixture_call {
         impl<$($types),+> FixtureMatrix<($(Vec<$types>),+,)> where
             $($types : Duplicate + TestName + 'static),+ ,
         {
-            pub fn flatten(self) -> Vec<BuilderCombination<($($types),+,)>>
+            pub fn flatten(self) -> Vec<ProxyCombination<($($types),+,)>>
             {
-                let ($($bnames),+, ) = self.builders;
+                let ($($bnames),+, ) = self.proxies;
                 let mut output = vec![];
-                iter_builder!(@call output ; $($fnames),+ ; $($bnames),+ ;);
+                iter_proxy!(@call output ; $($fnames),+ ; $($bnames),+ ;);
                 output
             }
         }
 
 
         impl<$($types),+> MatrixSetup<($($types),+,)> for FixtureMatrix<($($types),+,)> where
-            $($types : Duplicate + FixtureBuilder + TestName + 'static),+ ,
+            $($types : Duplicate + FixtureProxy + TestName + 'static),+ ,
         {
-            fn setup(ctx: &mut TestContext) -> Vec<BuilderCombination<($($types),+,)>> {
+            fn setup(ctx: &mut TestContext) -> Vec<ProxyCombination<($($types),+,)>> {
                 let fixture_matrix = FixtureMatrix::new();
-                impl_fixture_call!(@builder_setup, fixture_matrix, ctx, $($types),+)
+                impl_fixture_call!(@proxy_setup, fixture_matrix, ctx, $($types),+)
             }
         }
     }
@@ -358,9 +358,9 @@ macro_rules! impl_fixture_feed {
             /// A new `FixtureMatrix` containing the fed fixtures.
             pub fn feed<T>(self, new_fixs: Vec<T>) -> FixtureMatrix<($(Vec<$types>),+ ,Vec<T>)> {
                 let multiple = self.multiple || new_fixs.len() > 1;
-                                let ($($names),+, ) = self.builders;
-                                let builders = ($($names),+ , new_fixs);
-                FixtureMatrix { builders, multiple }
+                                let ($($names),+, ) = self.proxies;
+                                let proxies = ($($names),+ , new_fixs);
+                FixtureMatrix { proxies, multiple }
             }
         }
     };
@@ -402,14 +402,14 @@ mod tests {
     struct DummyFixture<T>(T);
 
     #[derive(Debug, PartialEq)]
-    struct DummyFixtureBuilder<T>(T);
+    struct DummyFixtureProxy<T>(T);
 
-    impl<T: Copy> Duplicate for DummyFixtureBuilder<T> {
+    impl<T: Copy> Duplicate for DummyFixtureProxy<T> {
         fn duplicate(&self) -> Self {
             Self(self.0)
         }
     }
-    impl<T> FixtureBuilder for DummyFixtureBuilder<T>
+    impl<T> FixtureProxy for DummyFixtureProxy<T>
     where
         T: Send + Copy + std::fmt::Display + 'static,
     {
@@ -433,7 +433,7 @@ mod tests {
         T: Send + Copy + std::fmt::Display + 'static,
     {
         type Type = T;
-        type Builder = DummyFixtureBuilder<T>;
+        type Proxy = DummyFixtureProxy<T>;
     }
     impl<T> std::ops::Deref for DummyFixture<T> {
         type Target = T;
@@ -441,7 +441,7 @@ mod tests {
             &self.0
         }
     }
-    impl<T: std::fmt::Display> TestName for DummyFixtureBuilder<T> {
+    impl<T: std::fmt::Display> TestName for DummyFixtureProxy<T> {
         fn name(&self) -> Option<String> {
             None
         }
@@ -450,57 +450,51 @@ mod tests {
     #[test]
     fn test_empty_fixture_registry() {
         let mut registry = FixtureRegistry::new();
-        assert!(registry.get::<DummyFixtureBuilder<i32>>().is_none());
+        assert!(registry.get::<DummyFixtureProxy<i32>>().is_none());
     }
 
     #[test]
     fn test_fixture_registry() {
         let mut registry = FixtureRegistry::new();
-        registry.add(vec![DummyFixtureBuilder(1u32), DummyFixtureBuilder(2u32)]);
-        let builders = registry.get::<DummyFixtureBuilder<u32>>().unwrap();
-        assert_eq!(builders.len(), 2);
-        assert_eq!(builders[0], DummyFixtureBuilder(1));
-        assert_eq!(builders[1], DummyFixtureBuilder(2));
-        assert!(registry.get::<DummyFixtureBuilder<u16>>().is_none());
+        registry.add(vec![DummyFixtureProxy(1u32), DummyFixtureProxy(2u32)]);
+        let proxies = registry.get::<DummyFixtureProxy<u32>>().unwrap();
+        assert_eq!(proxies.len(), 2);
+        assert_eq!(proxies[0], DummyFixtureProxy(1));
+        assert_eq!(proxies[1], DummyFixtureProxy(2));
+        assert!(registry.get::<DummyFixtureProxy<u16>>().is_none());
     }
 
     #[test]
     fn test_fixture_matrix() {
         let matrix = FixtureMatrix::new()
             .feed(vec![
-                DummyFixtureBuilder(1),
-                DummyFixtureBuilder(2),
-                DummyFixtureBuilder(3),
+                DummyFixtureProxy(1),
+                DummyFixtureProxy(2),
+                DummyFixtureProxy(3),
             ])
-            .feed(vec![
-                DummyFixtureBuilder("Hello"),
-                DummyFixtureBuilder("World"),
-            ]);
+            .feed(vec![DummyFixtureProxy("Hello"), DummyFixtureProxy("World")]);
         assert_eq!(
-            matrix.builders.0,
+            matrix.proxies.0,
             vec![
-                DummyFixtureBuilder(1),
-                DummyFixtureBuilder(2),
-                DummyFixtureBuilder(3)
+                DummyFixtureProxy(1),
+                DummyFixtureProxy(2),
+                DummyFixtureProxy(3)
             ]
         );
         assert_eq!(
-            matrix.builders.1,
-            vec![DummyFixtureBuilder("Hello"), DummyFixtureBuilder("World")]
+            matrix.proxies.1,
+            vec![DummyFixtureProxy("Hello"), DummyFixtureProxy("World")]
         );
     }
 
     #[test]
     fn test_matrix_caller() {
         let matrix = FixtureMatrix::new().feed(vec![
-            DummyFixtureBuilder(1),
-            DummyFixtureBuilder(2),
-            DummyFixtureBuilder(3),
+            DummyFixtureProxy(1),
+            DummyFixtureProxy(2),
+            DummyFixtureProxy(3),
         ]);
-        let matrix = matrix.feed(vec![
-            DummyFixtureBuilder("Hello"),
-            DummyFixtureBuilder("World"),
-        ]);
+        let matrix = matrix.feed(vec![DummyFixtureProxy("Hello"), DummyFixtureProxy("World")]);
         let combinations = matrix.flatten();
         let results = combinations
             .into_iter()
@@ -518,15 +512,12 @@ mod tests {
     #[test]
     fn test_matrix_caller_dim3() {
         let matrix = FixtureMatrix::new().feed(vec![
-            DummyFixtureBuilder(1),
-            DummyFixtureBuilder(2),
-            DummyFixtureBuilder(3),
+            DummyFixtureProxy(1),
+            DummyFixtureProxy(2),
+            DummyFixtureProxy(3),
         ]);
-        let matrix = matrix.feed(vec![
-            DummyFixtureBuilder("Hello"),
-            DummyFixtureBuilder("World"),
-        ]);
-        let matrix = matrix.feed(vec![DummyFixtureBuilder(42)]);
+        let matrix = matrix.feed(vec![DummyFixtureProxy("Hello"), DummyFixtureProxy("World")]);
+        let matrix = matrix.feed(vec![DummyFixtureProxy(42)]);
         let combinations = matrix.flatten();
         let results = combinations
             .into_iter()
@@ -552,9 +543,9 @@ mod tests {
                 Some(self.0.param_name())
             }
         }
-        let combination = BuilderCombination((P(5), P(false), P("A text")));
+        let combination = ProxyCombination((P(5), P(false), P("A text")));
         assert_eq!(combination.name(), Some("[5|false|A text]".into()));
-        let combination = BuilderCombination((P(5), P(false), P((Box::new(42), vec![5; 3]))));
+        let combination = ProxyCombination((P(5), P(false), P((Box::new(42), vec![5; 3]))));
         assert_eq!(combination.name(), Some("[5|false|(42,[5,5,5])]".into()));
     }
 }

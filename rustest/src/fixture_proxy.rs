@@ -5,21 +5,21 @@ use std::{
 
 use super::{
     fixture::{
-        Fixture, FixtureBuilder, FixtureCreationResult, FixtureScope, LazyValue,
-        SharedFixtureValue, TeardownFn,
+        Fixture, FixtureCreationResult, FixtureProxy, FixtureScope, LazyValue, SharedFixtureValue,
+        TeardownFn,
     },
     fixture_matrix::{
-        BuilderCall, BuilderCombination, CallArgs, Duplicate, FixtureMatrix, MatrixSetup,
+        CallArgs, Duplicate, FixtureMatrix, MatrixSetup, ProxyCall, ProxyCombination,
     },
     test_name::TestName,
 };
 
-/// The definition of a fixture, use by Builder to implement FixtureBuilder.
+/// The definition of a fixture, use by Proxy to implement FixtureProxy.
 #[doc(hidden)]
 pub trait FixtureDef {
     type Fixt: Fixture;
     type SubFixtures;
-    type SubBuilders;
+    type SubProxies;
     const SCOPE: FixtureScope;
 
     fn build_fixt(
@@ -31,17 +31,17 @@ pub trait FixtureDef {
 
 type InnerLazy<Def> = LazyValue<
     SharedFixtureValue<<<Def as FixtureDef>::Fixt as Fixture>::Type>,
-    <Def as FixtureDef>::SubBuilders,
+    <Def as FixtureDef>::SubProxies,
 >;
 
 #[doc(hidden)]
-pub struct Builder<Def: FixtureDef> {
+pub struct Proxy<Def: FixtureDef> {
     inner: Arc<Mutex<InnerLazy<Def>>>,
     name: Option<String>,
     _marker: PhantomData<Def>,
 }
 
-impl<Def: FixtureDef> Duplicate for Builder<Def> {
+impl<Def: FixtureDef> Duplicate for Proxy<Def> {
     fn duplicate(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -51,19 +51,19 @@ impl<Def: FixtureDef> Duplicate for Builder<Def> {
     }
 }
 
-impl<Def: FixtureDef> TestName for Builder<Def> {
+impl<Def: FixtureDef> TestName for Proxy<Def> {
     fn name(&self) -> Option<String> {
         self.name.clone()
     }
 }
 
-impl<Def: FixtureDef> Builder<Def>
+impl<Def: FixtureDef> Proxy<Def>
 where
-    BuilderCombination<Def::SubBuilders>: TestName,
+    ProxyCombination<Def::SubProxies>: TestName,
 {
-    fn new(builder: BuilderCombination<Def::SubBuilders>) -> Self {
-        let name = builder.name();
-        let inner = builder.into();
+    fn new(proxy: ProxyCombination<Def::SubProxies>) -> Self {
+        let name = proxy.name();
+        let inner = proxy.into();
         Self {
             inner: Arc::new(Mutex::new(inner)),
             name,
@@ -72,10 +72,10 @@ where
     }
 }
 
-impl<Def: FixtureDef + 'static> FixtureBuilder for Builder<Def>
+impl<Def: FixtureDef + 'static> FixtureProxy for Proxy<Def>
 where
-    BuilderCombination<Def::SubBuilders>: TestName + BuilderCall<Def::SubFixtures>,
-    FixtureMatrix<Def::SubBuilders>: MatrixSetup<Def::SubBuilders>,
+    ProxyCombination<Def::SubProxies>: TestName + ProxyCall<Def::SubFixtures>,
+    FixtureMatrix<Def::SubProxies>: MatrixSetup<Def::SubProxies>,
     Def::Fixt: From<SharedFixtureValue<<Def::Fixt as Fixture>::Type>>,
 {
     type Fixt = Def::Fixt;
@@ -86,8 +86,8 @@ where
             return b;
         }
         // We have to call this function for each combination of its fixtures.
-        let builders = FixtureMatrix::<Def::SubBuilders>::setup(ctx);
-        let inners = builders
+        let proxies = FixtureMatrix::<Def::SubProxies>::setup(ctx);
+        let inners = proxies
             .into_iter()
             .map(|b| Self::new(b))
             .collect::<Vec<_>>();
