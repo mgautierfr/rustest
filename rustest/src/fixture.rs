@@ -117,11 +117,15 @@ impl<F> SubFixture for F where F: Fixture + 'static {}
 /// Represents the scope of a fixture.
 ///
 /// The scope determines the test's "lifetime" of the fixture.
+#[derive(Copy, Clone)]
 pub enum FixtureScope {
     /// Fixture is used only once.
     ///
     /// The fixture is (re)created everytime we request it.
     Unique,
+
+    /// Fixture is unique in a Fixture/Test matrix.
+    MatrixUnique,
 
     /// Fixture is associated to a test.
     ///

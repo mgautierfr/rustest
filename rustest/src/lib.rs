@@ -249,6 +249,17 @@ pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode 
 ///
 /// The fixture is (re)created everytime it is requested. It is not shared.
 ///
+/// ## Matrix scope
+///
+/// `#[fixture(scope=matrix)]`
+///
+/// The fixture is created only once per matrix.
+/// There is a matrix per fixture and test.
+/// This means that the fixture is shared by every fixture variants / test cases.
+/// (Buit only at one level depth).
+/// If you want the fixture to be shared at test level, whatever the dependency tree is,
+/// use test or global scope.
+///
 /// ## Test scope
 ///
 /// `#[fixture(scope=test)]`

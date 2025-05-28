@@ -11,6 +11,7 @@ use crate::utils::{FixtureInfo, gen_fixture_call, gen_param_fixture, to_call_arg
 #[derive(Debug, PartialEq, Copy, Clone)]
 enum FixtureScope {
     Unique,
+    MatrixUnique,
     Test,
     Global,
 }
@@ -20,12 +21,13 @@ impl Parse for FixtureScope {
         let ident: Ident = input.parse()?;
         match ident.to_string().as_str() {
             "unique" => Ok(FixtureScope::Unique),
+            "matrix" => Ok(FixtureScope::MatrixUnique),
             "global" => Ok(FixtureScope::Global),
             "test" => Ok(FixtureScope::Test),
             _ => Err(syn::Error::new_spanned(
                 &ident,
                 format!(
-                    "expected one of 'unique', 'global', or 'test'. Got {}.",
+                    "expected one of 'unique', 'matrix', 'global', or 'test'. Got {}.",
                     ident
                 ),
             )),
@@ -37,6 +39,7 @@ impl From<FixtureScope> for TokenStream {
     fn from(value: FixtureScope) -> Self {
         match value {
             FixtureScope::Unique => quote! {::rustest::FixtureScope::Unique},
+            FixtureScope::MatrixUnique => quote! {::rustest::FixtureScope::MatrixUnique},
             FixtureScope::Test => quote! {::rustest::FixtureScope::Test},
             FixtureScope::Global => quote! {::rustest::FixtureScope::Global},
         }
@@ -372,7 +375,7 @@ mod tests {
         // Check that the error message is as expected
         assert_eq!(
             error.to_string(),
-            "expected one of 'unique', 'global', or 'test'. Got invalid_scope."
+            "expected one of 'unique', 'matrix', 'global', or 'test'. Got invalid_scope."
         );
     }
 }
