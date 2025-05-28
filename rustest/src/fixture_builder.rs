@@ -96,18 +96,13 @@ where
         inners
     }
 
-    fn build(&self) -> FixtureCreationResult<Self::Fixt> {
-        let inner = self
-            .inner
-            .lock()
-            .unwrap()
-            .get(|args| {
-                Ok(SharedFixtureValue::new(
-                    Def::build_fixt(args)?,
-                    Def::teardown(),
-                ))
-            })?
-            .clone();
+    fn build(self) -> FixtureCreationResult<Self::Fixt> {
+        let inner = self.inner.lock().unwrap().get(|args| {
+            Ok(SharedFixtureValue::new(
+                Def::build_fixt(args)?,
+                Def::teardown(),
+            ))
+        })?;
         Ok(inner.into())
     }
 }

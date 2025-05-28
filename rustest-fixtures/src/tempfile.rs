@@ -48,7 +48,7 @@ impl rustest::FixtureBuilder for TempFileBuilder {
         vec![Self(Arc::new(OnceLock::new()))]
     }
 
-    fn build(&self) -> rustest::FixtureCreationResult<Self::Fixt> {
+    fn build(self) -> rustest::FixtureCreationResult<Self::Fixt> {
         self.0
             .get_or_init(|| {
                 tempfile::NamedTempFile::new_in(std::env::temp_dir())

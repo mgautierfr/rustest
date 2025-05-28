@@ -423,7 +423,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn build(&self) -> FixtureCreationResult<DummyFixture<T>> {
+        fn build(self) -> FixtureCreationResult<DummyFixture<T>> {
             Ok(DummyFixture(self.0))
         }
     }

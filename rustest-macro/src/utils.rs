@@ -132,8 +132,8 @@ pub(crate) fn gen_param_fixture(
                     #expr.into_iter().map(Self::new).collect()
                 }
 
-                fn build(&self) -> ::rustest::FixtureCreationResult<Self::Fixt> {
-                    Ok(Param(self.v.clone()))
+                fn build(self) -> ::rustest::FixtureCreationResult<Self::Fixt> {
+                    Ok(Param(self.v))
                 }
             }
 

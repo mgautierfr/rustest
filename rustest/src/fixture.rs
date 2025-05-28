@@ -71,7 +71,7 @@ pub trait FixtureBuilder: Duplicate + TestName {
     ///
     /// Note that duplicated builder must build the **SAME** fixture.
     /// It is up to the builder implementation to take care of needed cache or shared states.
-    fn build(&self) -> FixtureCreationResult<Self::Fixt>
+    fn build(self) -> FixtureCreationResult<Self::Fixt>
     where
         Self: Sized;
 }
