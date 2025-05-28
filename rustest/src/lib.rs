@@ -126,13 +126,13 @@ use fixture::FixtureRegistry;
 pub use fixture::SharedFixtureValue;
 pub use fixture::{
     Fixture, FixtureCreationError, FixtureCreationResult, FixtureProxy, FixtureScope,
-    FixtureTeardown, SubFixture, TeardownFn,
+    FixtureTeardown, LazyValue, SubFixture, TeardownFn,
 };
 #[doc(hidden)]
 pub use fixture_proxy::{FixtureDef, OnceProxy, SharedProxy};
 pub use proxy_matrix::Duplicate;
 #[doc(hidden)]
-pub use proxy_matrix::{CallArgs, ProxyCall, ProxyCombination, ProxyMatrix};
+pub use proxy_matrix::{CallArgs, MatrixSetup, ProxyCall, ProxyCombination, ProxyMatrix};
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError, TestGenerator, TestRunner};
 pub use test::{Result, Test, TestContext};

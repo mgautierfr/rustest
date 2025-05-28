@@ -231,7 +231,10 @@ impl<T> Drop for FixtureTeardown<T> {
     }
 }
 
-#[doc(hidden)]
+/// A lazyness value build when we get it.
+/// The value is build by calling the Fn (in get) using the builders.
+/// This intermediate structure is needed as we know the sub builders when we setup
+/// a builder, and we have the build fn when we build the fixture.
 pub enum LazyValue<V, B> {
     Value(SharedFixtureValue<V>),
     Proxies(Option<ProxyCombination<B>>),
