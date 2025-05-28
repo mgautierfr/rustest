@@ -161,6 +161,13 @@ macro_rules! impl_fixture_test_name {
                 None
             }
         }
+
+        impl Duplicate for ProxyCombination<()>
+        {
+            fn duplicate(&self) -> Self {
+                ProxyCombination(())
+            }
+        }
     };
     (($($types:tt),+), ($($names:ident),+)) => {
         impl< $($types),+ > TestName for ProxyCombination<($($types),+,)>
@@ -178,6 +185,16 @@ macro_rules! impl_fixture_test_name {
                 } else {
                     Some(format!("[{}]", vec.join("|")))
                 }
+            }
+        }
+        impl< $($types),+ > Duplicate for ProxyCombination<($($types),+,)>
+           where
+                $($types : Duplicate),+ ,
+        {
+            fn duplicate(&self) -> Self {
+                let ($($names),+, ) = &self.0;
+                $(let $names = $names.duplicate();)+
+                ProxyCombination(($($names),+ ,))
             }
         }
     }

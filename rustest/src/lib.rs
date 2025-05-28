@@ -125,11 +125,11 @@ use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
 pub use fixture::{
-    Fixture, FixtureCreationError, FixtureCreationResult, FixtureProxy, FixtureScope, SubFixture,
-    TeardownFn,
+    Fixture, FixtureCreationError, FixtureCreationResult, FixtureProxy, FixtureScope,
+    FixtureTeardown, SubFixture, TeardownFn,
 };
 #[doc(hidden)]
-pub use fixture_proxy::{FixtureDef, Proxy};
+pub use fixture_proxy::{FixtureDef, SharedProxy, UniqueProxy};
 pub use proxy_matrix::Duplicate;
 #[doc(hidden)]
 pub use proxy_matrix::{CallArgs, ProxyCall, ProxyCombination, ProxyMatrix};

@@ -201,9 +201,15 @@ pub type TeardownFn<T> = Box<dyn Fn(&mut T) + Send + Sync>;
 ///
 /// `FixtureTeardown` holds a value and an optional teardown function that is called when the
 /// fixture is dropped.
-struct FixtureTeardown<T> {
+pub struct FixtureTeardown<T> {
     value: T,
     teardown: Option<TeardownFn<T>>,
+}
+
+impl<T> FixtureTeardown<T> {
+    pub fn new(value: T, teardown: Option<TeardownFn<T>>) -> Self {
+        Self { value, teardown }
+    }
 }
 
 impl<T> std::ops::Deref for FixtureTeardown<T> {
