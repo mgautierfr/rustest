@@ -223,7 +223,7 @@ impl<T> Drop for FixtureTeardown<T> {
 
 #[doc(hidden)]
 pub enum LazyValue<V, B> {
-    Value(V),
+    Value(SharedFixtureValue<V>),
     Proxies(Option<ProxyCombination<B>>),
 }
 
@@ -233,15 +233,15 @@ impl<V, B> From<ProxyCombination<B>> for LazyValue<V, B> {
     }
 }
 
-impl<V: Clone, B> LazyValue<V, B> {
-    pub fn get<F, T>(&mut self, f: F) -> FixtureCreationResult<V>
+impl<V, B> LazyValue<V, B> {
+    pub fn get<F, T>(&mut self, f: F) -> FixtureCreationResult<SharedFixtureValue<V>>
     where
-        F: Fn(CallArgs<T>) -> FixtureCreationResult<V>,
+        F: Fn(CallArgs<T>) -> FixtureCreationResult<(V, Option<Arc<TeardownFn<V>>>)>,
         ProxyCombination<B>: ProxyCall<T>,
     {
         if let LazyValue::Proxies(b) = self {
-            let value = b.take().unwrap().call(f)?;
-            *self = LazyValue::Value(value);
+            let (value, teardown) = b.take().unwrap().call(f)?;
+            *self = LazyValue::Value(SharedFixtureValue::new(value, teardown));
         };
 
         match self {

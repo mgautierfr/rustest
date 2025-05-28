@@ -27,10 +27,8 @@ pub trait FixtureDef {
     fn teardown() -> Option<Arc<TeardownFn<<Self::Fixt as Fixture>::Type>>>;
 }
 
-type InnerLazy<Def> = LazyValue<
-    SharedFixtureValue<<<Def as FixtureDef>::Fixt as Fixture>::Type>,
-    <Def as FixtureDef>::SubProxies,
->;
+type InnerLazy<Def> =
+    LazyValue<<<Def as FixtureDef>::Fixt as Fixture>::Type, <Def as FixtureDef>::SubProxies>;
 
 #[doc(hidden)]
 pub struct Proxy<Def: FixtureDef> {
@@ -95,12 +93,11 @@ where
     }
 
     fn build(self) -> FixtureCreationResult<Self::Fixt> {
-        let inner = self.inner.lock().unwrap().get(|args| {
-            Ok(SharedFixtureValue::new(
-                Def::build_fixt(args)?,
-                Def::teardown(),
-            ))
-        })?;
+        let inner = self
+            .inner
+            .lock()
+            .unwrap()
+            .get(|args| Ok((Def::build_fixt(args)?, Def::teardown())))?;
         Ok(inner.into())
     }
 }
