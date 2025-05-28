@@ -1,8 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{
-    Expr, FnArg, Generics, Ident, PatType, PathArguments, Signature, Type, TypePath, Visibility,
-};
+use syn::{Expr, FnArg, Ident, PatType, PathArguments, Signature, Type, TypePath, Visibility};
 
 pub fn to_tuple(input: &[TokenStream]) -> TokenStream {
     if input.is_empty() {
@@ -48,13 +46,10 @@ pub(crate) fn gen_fixture_call(
                     path.clone()
                 };
                 let last_segment = new_path.segments.last_mut().unwrap();
-                if let PathArguments::AngleBracketed(g) = &last_segment.arguments {
-                    let gene: Generics = syn::parse_quote! { #g };
-                    let gene = gene.split_for_impl();
-                    let turbo_fish = gene.1.as_turbofish();
-                    last_segment.arguments = PathArguments::None;
+                if let PathArguments::AngleBracketed(_) = last_segment.arguments {
+                    let g = std::mem::take(&mut last_segment.arguments);
                     sub_fixtures_builders
-                        .push(quote! { <#new_path #turbo_fish as ::rustest::Fixture>::Builder });
+                        .push(quote! { <#new_path :: #g as ::rustest::Fixture>::Builder });
                 } else {
                     sub_fixtures_builders
                         .push(quote! { <#new_path as ::rustest::Fixture>::Builder });
