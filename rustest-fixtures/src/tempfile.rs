@@ -53,7 +53,7 @@ impl rustest::FixtureBuilder for TempFileBuilder {
         self.0
             .get_or_init(|| {
                 tempfile::NamedTempFile::new_in(std::env::temp_dir())
-                    .map(|f| Arc::new(f))
+                    .map(Arc::new)
                     .map_err(|e| rustest::FixtureCreationError::new("TempFile", e))
             })
             .as_ref()
