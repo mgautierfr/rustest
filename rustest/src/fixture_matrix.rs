@@ -413,7 +413,6 @@ mod tests {
     where
         T: Send + Copy + std::fmt::Display + 'static,
     {
-        type Type = T;
         type Fixt = DummyFixture<T>;
         const SCOPE: FixtureScope = FixtureScope::Unique;
 

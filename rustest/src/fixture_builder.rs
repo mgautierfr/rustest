@@ -79,7 +79,6 @@ where
     Def::Fixt: From<SharedFixtureValue<<Def::Fixt as Fixture>::Type>>,
 {
     type Fixt = Def::Fixt;
-    type Type = <Def::Fixt as Fixture>::Type;
     const SCOPE: FixtureScope = Def::SCOPE;
 
     fn setup(ctx: &mut crate::TestContext) -> Vec<Self> {

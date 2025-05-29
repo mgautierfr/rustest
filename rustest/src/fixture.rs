@@ -46,9 +46,6 @@ impl FixtureCreationError {
 ///
 ///
 pub trait FixtureBuilder: Duplicate + TestName {
-    /// The user type of the fixture.
-    type Type;
-
     type Fixt: Fixture;
 
     const SCOPE: FixtureScope;

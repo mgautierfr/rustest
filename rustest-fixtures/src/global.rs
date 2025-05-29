@@ -61,7 +61,6 @@ impl<Source: SubFixture> rustest::TestName for GlobalBuilder<Source> {
 
 impl<Source: SubFixture> rustest::FixtureBuilder for GlobalBuilder<Source> {
     type Fixt = Global<Source>;
-    type Type = Source::Type;
     const SCOPE: rustest::FixtureScope = rustest::FixtureScope::Global;
 
     fn setup(ctx: &mut rustest::TestContext) -> Vec<Self>

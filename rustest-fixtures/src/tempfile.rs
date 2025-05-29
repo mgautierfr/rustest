@@ -39,7 +39,6 @@ impl rustest::TestName for TempFileBuilder {
 
 impl rustest::FixtureBuilder for TempFileBuilder {
     type Fixt = TempFile;
-    type Type = tempfile::NamedTempFile;
     const SCOPE: FixtureScope = FixtureScope::Unique;
 
     fn setup(_ctx: &mut rustest::TestContext) -> Vec<Self>

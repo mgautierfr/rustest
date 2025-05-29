@@ -125,7 +125,6 @@ pub(crate) fn gen_param_fixture(
 
             impl ::rustest::FixtureBuilder for ParamBuilder
              {
-                type Type = #param_type;
                 type Fixt = Param;
                 const SCOPE : ::rustest::FixtureScope = ::rustest::FixtureScope::Test;
 
