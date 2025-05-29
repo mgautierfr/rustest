@@ -49,3 +49,18 @@ jobs:
 
       - name: Run audit
         run: cargo audit
+
+  # simplify GH settings: have one single build to be required
+  build-results:
+    name: Final Results
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    needs:
+      - build_and_test
+    steps:
+      - name: check for failed builds
+        run: |
+          cat <<EOF | jq -e 'unique | all(. == "success")'
+          ${{ toJson(needs.*.result) }}
+          EOF
+
