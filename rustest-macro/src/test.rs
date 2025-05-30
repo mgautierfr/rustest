@@ -37,7 +37,7 @@ fn is_ignored(attrs: &[Attribute]) -> Result<Option<syn::Expr>, TokenStream> {
 pub(crate) struct TestAttr {
     xfail: bool,
     ignore: Option<syn::Expr>,
-    params: Option<(syn::Type, syn::Expr)>,
+    params: Option<(syn::Visibility, syn::Type, syn::Expr)>,
 }
 
 impl Parse for TestAttr {
@@ -61,10 +61,11 @@ impl Parse for TestAttr {
                 }
                 "params" => {
                     let _: syn::Token![:] = input.parse()?;
+                    let visibility: syn::Visibility = input.parse()?;
                     let ty = input.parse()?;
                     let _: syn::Token![=] = input.parse()?;
                     let expr = input.parse()?;
-                    params = Some((ty, expr));
+                    params = Some((visibility, ty, expr));
                 }
 
                 _ => {
@@ -180,7 +181,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
 mod tests {
     use super::*;
     use quote::quote;
-    use syn::{ItemFn, parse_quote, parse2};
+    use syn::{ItemFn, Visibility, parse_quote, parse2};
 
     #[test]
     fn test_parse_test_attr_no_attr() {
@@ -274,7 +275,11 @@ mod tests {
             TestAttr {
                 xfail: false,
                 ignore: None,
-                params: Some((parse_quote! { (u32,u8) }, parse_quote! { [(10,5),(42,58)] }))
+                params: Some((
+                    Visibility::Inherited,
+                    parse_quote! { (u32,u8) },
+                    parse_quote! { [(10,5),(42,58)] }
+                ))
             }
         );
     }
@@ -291,7 +296,11 @@ mod tests {
             TestAttr {
                 xfail: true,
                 ignore: None,
-                params: Some((parse_quote! { (u32,u8) }, parse_quote! { [(10,5),(42,58)] }))
+                params: Some((
+                    Visibility::Inherited,
+                    parse_quote! { (u32,u8) },
+                    parse_quote! { [(10,5),(42,58)] }
+                ))
             }
         );
     }
@@ -308,7 +317,11 @@ mod tests {
             TestAttr {
                 xfail: true,
                 ignore: None,
-                params: Some((parse_quote! { (u32,u8) }, parse_quote! { [(10,5),(42,58)] }))
+                params: Some((
+                    Visibility::Inherited,
+                    parse_quote! { (u32,u8) },
+                    parse_quote! { [(10,5),(42,58)] }
+                ))
             }
         );
     }

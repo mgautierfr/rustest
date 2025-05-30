@@ -48,7 +48,7 @@ pub(crate) struct FixtureAttr {
     fallible: Option<bool>,
     name: Option<Ident>,
     teardown: Option<syn::Expr>,
-    params: Option<(syn::Type, syn::Expr)>,
+    params: Option<(syn::Visibility, syn::Type, syn::Expr)>,
 }
 
 impl Parse for FixtureAttr {
@@ -85,10 +85,11 @@ impl Parse for FixtureAttr {
                 }
                 "params" => {
                     let _: syn::Token![:] = input.parse()?;
+                    let visibility: syn::Visibility = input.parse()?;
                     let ty = input.parse()?;
                     let _: syn::Token![=] = input.parse()?;
                     let expr = input.parse()?;
-                    params = Some((ty, expr));
+                    params = Some((visibility, ty, expr));
                 }
                 _ => {
                     return Err(syn::Error::new_spanned(

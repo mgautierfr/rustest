@@ -1,6 +1,8 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Expr, FnArg, Generics, Ident, PatType, PathArguments, Signature, Type, TypePath};
+use syn::{
+    Expr, FnArg, Generics, Ident, PatType, PathArguments, Signature, Type, TypePath, Visibility,
+};
 
 pub fn to_tuple(input: &[TokenStream]) -> TokenStream {
     if input.is_empty() {
@@ -73,7 +75,7 @@ pub(crate) fn gen_fixture_call(
 }
 
 pub(crate) fn gen_param_fixture(
-    params: &Option<(Type, Expr)>,
+    params: &Option<(Visibility, Type, Expr)>,
     fixture_name: Option<&Ident>,
 ) -> TokenStream {
     let test_name_format = if let Some(i) = fixture_name {
@@ -81,10 +83,15 @@ pub(crate) fn gen_param_fixture(
     } else {
         "{}".to_owned()
     };
-    if let Some((param_type, expr)) = params {
+    if let Some((visibility, param_type, expr)) = params {
+        let visibility = if let Visibility::Inherited = visibility {
+            quote! { pub }
+        } else {
+            quote! { #visibility }
+        };
         quote! {
-            pub struct Param(pub #param_type);
-            pub struct ParamBuilder(#param_type);
+            #visibility struct Param(pub #param_type);
+            #visibility struct ParamBuilder(#param_type);
             impl ParamBuilder
             {
                 fn new(inner: #param_type) -> Self {

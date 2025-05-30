@@ -459,6 +459,29 @@ pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode 
 /// # fn main() {}
 /// ```
 ///
+/// `Param` type is internally declared as a `pub` struct in a submodule. It should be ok most of the time.
+/// But if you parametrized the fixture with a type which is not public this will result in a error about
+/// "private type in public interface". You can specify a custom publicity for param to solve this problem:
+///
+/// ```
+/// use rustest::{test ,*};
+///
+/// #[derive(Clone)]
+/// pub(crate) struct MyValue(u32);
+///
+/// impl TestName for MyValue {
+///     fn name(&self) -> Option<String> {
+///         Some(format!("{}", self.0))
+///     }
+/// }
+///
+/// #[fixture(params:pub(crate)MyValue=[MyValue(1), MyValue(5), MyValue(2)])]
+/// fn ParamFixture(Param(MyValue(p)): Param) -> u32 { p }
+///
+/// # #[main]
+/// # fn main() {}
+/// ```
+///
 /// # Fixture Teardown
 ///
 /// Fixtures can be teardown with `teardown` argument.
