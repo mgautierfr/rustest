@@ -103,13 +103,13 @@ where
 }
 
 #[doc(hidden)]
-pub struct UniqueProxy<Def: FixtureDef> {
+pub struct OnceProxy<Def: FixtureDef> {
     sub_proxies: ProxyCombination<Def::SubProxies>,
     name: Option<String>,
     _marker: PhantomData<Def>,
 }
 
-impl<Def: FixtureDef> Duplicate for UniqueProxy<Def>
+impl<Def: FixtureDef> Duplicate for OnceProxy<Def>
 where
     ProxyCombination<Def::SubProxies>: Duplicate,
 {
@@ -122,13 +122,13 @@ where
     }
 }
 
-impl<Def: FixtureDef> TestName for UniqueProxy<Def> {
+impl<Def: FixtureDef> TestName for OnceProxy<Def> {
     fn name(&self) -> Option<String> {
         self.name.clone()
     }
 }
 
-impl<Def: FixtureDef> UniqueProxy<Def>
+impl<Def: FixtureDef> OnceProxy<Def>
 where
     ProxyCombination<Def::SubProxies>: TestName,
 {
@@ -142,7 +142,7 @@ where
     }
 }
 
-impl<Def: FixtureDef + 'static> FixtureProxy for UniqueProxy<Def>
+impl<Def: FixtureDef + 'static> FixtureProxy for OnceProxy<Def>
 where
     ProxyCombination<Def::SubProxies>: TestName + ProxyCall<Def::SubFixtures> + Duplicate,
     ProxyMatrix<Def::SubProxies>: MatrixSetup<Def::SubProxies>,

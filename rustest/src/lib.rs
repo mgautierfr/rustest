@@ -129,7 +129,7 @@ pub use fixture::{
     FixtureTeardown, SubFixture, TeardownFn,
 };
 #[doc(hidden)]
-pub use fixture_proxy::{FixtureDef, SharedProxy, UniqueProxy};
+pub use fixture_proxy::{FixtureDef, OnceProxy, SharedProxy};
 pub use proxy_matrix::Duplicate;
 #[doc(hidden)]
 pub use proxy_matrix::{CallArgs, ProxyCall, ProxyCombination, ProxyMatrix};
@@ -241,9 +241,9 @@ pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode 
 ///
 /// # Fixture's scope
 ///
-/// ## Unique scope
+/// ## Once scope
 ///
-/// `#[fixture(scope=unique)]`
+/// `#[fixture(scope=once)]`
 ///
 /// This is the default if not specified.
 ///

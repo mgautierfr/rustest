@@ -122,7 +122,7 @@ pub enum FixtureScope {
     /// Fixture is used only once.
     ///
     /// The fixture is (re)created everytime we request it.
-    Unique,
+    Once,
 
     /// Fixture is unique in a Fixture/Test matrix.
     MatrixUnique,

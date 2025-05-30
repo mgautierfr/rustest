@@ -431,7 +431,7 @@ mod tests {
         T: Send + Copy + std::fmt::Display + 'static,
     {
         type Fixt = DummyFixture<T>;
-        const SCOPE: FixtureScope = FixtureScope::Unique;
+        const SCOPE: FixtureScope = FixtureScope::Once;
 
         fn setup(_ctx: &mut TestContext) -> Vec<Self>
         where

@@ -10,7 +10,7 @@ use crate::utils::{FixtureInfo, gen_fixture_call, gen_param_fixture, to_call_arg
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 enum FixtureScope {
-    Unique,
+    Once,
     MatrixUnique,
     Test,
     Global,
@@ -20,14 +20,14 @@ impl Parse for FixtureScope {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let ident: Ident = input.parse()?;
         match ident.to_string().as_str() {
-            "unique" => Ok(FixtureScope::Unique),
+            "once" => Ok(FixtureScope::Once),
             "matrix" => Ok(FixtureScope::MatrixUnique),
             "global" => Ok(FixtureScope::Global),
             "test" => Ok(FixtureScope::Test),
             _ => Err(syn::Error::new_spanned(
                 &ident,
                 format!(
-                    "expected one of 'unique', 'matrix', 'global', or 'test'. Got {}.",
+                    "expected one of 'once', 'matrix', 'global', or 'test'. Got {}.",
                     ident
                 ),
             )),
@@ -38,7 +38,7 @@ impl Parse for FixtureScope {
 impl From<FixtureScope> for TokenStream {
     fn from(value: FixtureScope) -> Self {
         match value {
-            FixtureScope::Unique => quote! {::rustest::FixtureScope::Unique},
+            FixtureScope::Once => quote! {::rustest::FixtureScope::Once},
             FixtureScope::MatrixUnique => quote! {::rustest::FixtureScope::MatrixUnique},
             FixtureScope::Test => quote! {::rustest::FixtureScope::Test},
             FixtureScope::Global => quote! {::rustest::FixtureScope::Global},
@@ -162,7 +162,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
     let (impl_generics, ty_generics, where_clause) = fixture_generics.split_for_impl();
     let (fallible, fixture_type) = get_fixture_type(&sig)?;
     let fallible = args.fallible.unwrap_or(fallible);
-    let scope = args.scope.unwrap_or(FixtureScope::Unique);
+    let scope = args.scope.unwrap_or(FixtureScope::Once);
 
     let scope_token = TokenStream::from(scope);
 
@@ -250,10 +250,10 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         }
     };
 
-    let (inner_type, proxy_type) = if let FixtureScope::Unique = scope {
+    let (inner_type, proxy_type) = if let FixtureScope::Once = scope {
         (
             quote! { ::rustest::FixtureTeardown<#fixture_type> },
-            quote! { ::rustest::UniqueProxy },
+            quote! { ::rustest::OnceProxy },
         )
     } else {
         (
@@ -325,13 +325,13 @@ mod tests {
     #[test]
     fn test_parse_fixture_attr_some_fields() {
         let input = quote! {
-            scope = unique,
+            scope = once,
             fallible = false
         };
 
         let fixture_attr = parse2::<FixtureAttr>(input).unwrap();
 
-        assert_eq!(fixture_attr.scope, Some(FixtureScope::Unique));
+        assert_eq!(fixture_attr.scope, Some(FixtureScope::Once));
         assert!(!fixture_attr.fallible.unwrap());
         assert!(fixture_attr.name.is_none());
         assert!(fixture_attr.teardown.is_none());
@@ -375,7 +375,7 @@ mod tests {
         // Check that the error message is as expected
         assert_eq!(
             error.to_string(),
-            "expected one of 'unique', 'matrix', 'global', or 'test'. Got invalid_scope."
+            "expected one of 'once', 'matrix', 'global', or 'test'. Got invalid_scope."
         );
     }
 }

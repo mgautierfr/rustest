@@ -39,7 +39,7 @@ impl rustest::TestName for TempFileProxy {
 
 impl rustest::FixtureProxy for TempFileProxy {
     type Fixt = TempFile;
-    const SCOPE: FixtureScope = FixtureScope::Unique;
+    const SCOPE: FixtureScope = FixtureScope::Once;
 
     fn setup(_ctx: &mut rustest::TestContext) -> Vec<Self>
     where
