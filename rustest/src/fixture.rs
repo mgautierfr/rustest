@@ -195,7 +195,7 @@ impl FixtureRegistry {
 /// A type alias for a teardown function.
 ///
 /// The teardown function is called when the fixture is dropped to clean up resources.
-pub type TeardownFn<T> = dyn Fn(&mut T) + Send + Sync;
+pub type TeardownFn<T> = Box<dyn Fn(&mut T) + Send + Sync>;
 
 /// A struct that manages the teardown of a fixture.
 ///
@@ -203,7 +203,7 @@ pub type TeardownFn<T> = dyn Fn(&mut T) + Send + Sync;
 /// fixture is dropped.
 struct FixtureTeardown<T> {
     value: T,
-    teardown: Option<Arc<TeardownFn<T>>>,
+    teardown: Option<TeardownFn<T>>,
 }
 
 impl<T> std::ops::Deref for FixtureTeardown<T> {
@@ -236,7 +236,7 @@ impl<V, B> From<ProxyCombination<B>> for LazyValue<V, B> {
 impl<V, B> LazyValue<V, B> {
     pub fn get<F, T>(&mut self, f: F) -> FixtureCreationResult<SharedFixtureValue<V>>
     where
-        F: Fn(CallArgs<T>) -> FixtureCreationResult<(V, Option<Arc<TeardownFn<V>>>)>,
+        F: Fn(CallArgs<T>) -> FixtureCreationResult<(V, Option<TeardownFn<V>>)>,
         ProxyCombination<B>: ProxyCall<T>,
     {
         if let LazyValue::Proxies(b) = self {
@@ -259,11 +259,8 @@ impl<V, B> LazyValue<V, B> {
 pub struct SharedFixtureValue<T>(Arc<FixtureTeardown<T>>);
 
 impl<T> SharedFixtureValue<T> {
-    pub fn new(value: T, teardown: Option<Arc<TeardownFn<T>>>) -> Self {
-        Self(Arc::new(FixtureTeardown {
-            value,
-            teardown: teardown.clone(),
-        }))
+    pub fn new(value: T, teardown: Option<TeardownFn<T>>) -> Self {
+        Self(Arc::new(FixtureTeardown { value, teardown }))
     }
 }
 

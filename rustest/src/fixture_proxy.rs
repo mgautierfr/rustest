@@ -24,7 +24,7 @@ pub trait FixtureDef {
         args: CallArgs<Self::SubFixtures>,
     ) -> FixtureCreationResult<<Self::Fixt as Fixture>::Type>;
 
-    fn teardown() -> Option<Arc<TeardownFn<<Self::Fixt as Fixture>::Type>>>;
+    fn teardown() -> Option<TeardownFn<<Self::Fixt as Fixture>::Type>>;
 }
 
 type InnerLazy<Def> =

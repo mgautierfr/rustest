@@ -195,7 +195,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
 
     let teardown = args
         .teardown
-        .map(|expr| quote! { Some(std::sync::Arc::new(#expr)) })
+        .map(|expr| quote! { Some(Box::new(#expr)) })
         .unwrap_or_else(|| quote! { None });
 
     let mut phantom_markers = vec![];
@@ -248,7 +248,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                 #convert_result
             }
 
-            fn teardown() -> Option<std::sync::Arc<::rustest::TeardownFn<<Self::Fixt as ::rustest::Fixture>::Type>>> {
+            fn teardown() -> Option<::rustest::TeardownFn<<Self::Fixt as ::rustest::Fixture>::Type>> {
                 #teardown
             }
         }
