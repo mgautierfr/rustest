@@ -136,7 +136,7 @@ pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, FixtureMatri
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError, TestGenerator, TestRunner};
 pub use test::{Result, Test, TestContext};
-pub use test_name::{ParamName, TestName};
+pub use test_name::{ParamName, TestName, ToParamName};
 
 pub use ctor::declarative::ctor;
 
