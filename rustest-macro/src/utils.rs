@@ -91,25 +91,35 @@ pub(crate) fn gen_param_fixture(
         };
         quote! {
             #visibility struct Param(pub #param_type);
-            #visibility struct ParamBuilder(#param_type);
+            #visibility struct ParamBuilder {
+                v: #param_type,
+                name: String
+            }
             impl ParamBuilder
             {
-                fn new(inner: #param_type) -> Self {
-                    Self(inner)
+                fn new<T>(inner: T) -> Self
+                where
+                    T: ::rustest::ToParamName<#param_type>
+                {
+                    let (v, name) = inner.into();
+                    let name = format!(#test_name_format, name);
+                    Self{v, name}
                 }
             }
 
             impl ::rustest::Duplicate for ParamBuilder {
                 fn duplicate(&self) -> Self {
-                    Self(self.0.clone())
+                    Self{
+                        v: self.v.clone(),
+                        name: self.name.clone()
+                    }
                 }
             }
 
             impl ::rustest::TestName for ParamBuilder
             {
                 fn name(&self) -> Option<String> {
-                    // Param value should always be display
-                    Some(format!(#test_name_format, self.0.name().unwrap()))
+                    Some(self.name.clone())
                 }
             }
 
@@ -120,11 +130,11 @@ pub(crate) fn gen_param_fixture(
                 const SCOPE : ::rustest::FixtureScope = ::rustest::FixtureScope::Test;
 
                 fn setup(ctx: &mut ::rustest::TestContext) -> Vec<Self> {
-                    #expr.into_iter().map(|i| Self::new(i)).collect()
+                    #expr.into_iter().map(Self::new).collect()
                 }
 
                 fn build(&self) -> ::rustest::FixtureCreationResult<Self::Fixt> {
-                    Ok(Param(self.0.clone()))
+                    Ok(Param(self.v.clone()))
                 }
             }
 

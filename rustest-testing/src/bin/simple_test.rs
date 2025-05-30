@@ -52,5 +52,8 @@ fn test_param_global_number_bis(number: ParamGlobalNumber) {
     assert_eq!(input * 2, expected);
 }
 
+#[test(params:u32=[(5, "five"), (6, "six")])]
+fn test_named(Param(_n): Param) {}
+
 #[main]
 fn main() {}

@@ -189,9 +189,17 @@ fn test_output() {
         b"test test_param_global_number_bis[ParamGlobalNumber:42] ... ok",
         1,
     );
+    dict.check(
+        b"test test_named[five]                                   ... ok",
+        1,
+    );
+    dict.check(
+        b"test test_named[six]                                    ... ok",
+        1,
+    );
     dict.check_end(TestResult {
-        tested: 13,
-        passed: 13,
+        tested: 15,
+        passed: 15,
         ..Default::default()
     });
 }
@@ -216,7 +224,7 @@ fn test_output_param_only() {
     dict.check_end(TestResult {
         tested: 6,
         passed: 6,
-        filtered_out: 7,
+        filtered_out: 9,
         ..Default::default()
     });
 }
@@ -239,6 +247,8 @@ test_param_global_number[ParamGlobalNumber:42]: test
 test_param_global_number_bis[ParamGlobalNumber:5]: test
 test_param_global_number_bis[ParamGlobalNumber:6]: test
 test_param_global_number_bis[ParamGlobalNumber:42]: test
+test_named[five]: test
+test_named[six]: test
 ",
         "{}",
         String::from_utf8_lossy(&output.stdout)
