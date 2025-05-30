@@ -74,7 +74,7 @@ impl<T> IntoError for googletest::Result<T> {
     }
 }
 
-pub type TestRunner = dyn FnOnce() -> InnerTestResult + std::panic::UnwindSafe + 'static;
+pub type TestRunner = dyn FnOnce() -> InnerTestResult + 'static;
 pub type TestGenerator = dyn FnOnce() -> FixtureCreationResult<Box<TestRunner>> + Send + 'static;
 
 /// An actual test run by rustest
@@ -125,7 +125,7 @@ impl Test {
         setup_gtest();
         let test_runner = (self.runner)()
             .map_err(|e| Failed::from(format!("Fixture {} error: {}", e.fixture_name, e.error)))?;
-        let unwind_result = std::panic::catch_unwind(test_runner);
+        let unwind_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(test_runner));
         let test_result = match unwind_result {
             Ok(Ok(())) => Ok(()),
             Ok(Err(e)) => Err(e),
