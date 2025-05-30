@@ -186,7 +186,7 @@ impl<'a> TestContext<'a> {
         let reg = match B::SCOPE {
             FixtureScope::Test => &mut self.reg,
             FixtureScope::Global => &mut self.global_reg,
-            FixtureScope::Unique => return,
+            _ => return,
         };
         reg.add::<B>(value)
     }
@@ -198,7 +198,7 @@ impl<'a> TestContext<'a> {
         let reg = match B::SCOPE {
             FixtureScope::Test => &mut self.reg,
             FixtureScope::Global => &mut self.global_reg,
-            FixtureScope::Unique => return None,
+            _ => return None,
         };
         reg.get::<B>()
     }

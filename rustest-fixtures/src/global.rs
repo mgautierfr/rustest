@@ -1,5 +1,5 @@
-use rustest::{Duplicate, SubFixture};
-
+use rustest::*;
+use std::sync::{Arc, Mutex};
 /// Transform a fixture into a global fixture.
 ///
 /// ```rust
@@ -29,57 +29,90 @@ use rustest::{Duplicate, SubFixture};
 ///
 /// But with `Global`, you define the fixture to be global at test level.
 /// It can be useful when composing external fixtures which can be define in external crate.
-pub struct Global<Source: SubFixture>(Source);
+///
 
-impl<Source: SubFixture> std::ops::Deref for Global<Source> {
-    type Target = Source::Target;
-    fn deref(&self) -> &Self::Target {
-        self.0.deref()
-    }
-}
+#[derive(Clone)]
+pub struct Global<Source>(::rustest::SharedFixtureValue<Source>)
+where
+    Source: SubFixture;
 
-impl<Source: SubFixture> rustest::Fixture for Global<Source> {
+impl<Source> Fixture for Global<Source>
+where
+    Source: SubFixture,
+{
     type Type = Source::Type;
-    type Proxy = GlobalProxy<Source>;
+    type Proxy = Proxy<Source>;
 }
 
-// Duplicated `Source::Proxy` already handle the inner cache on the value,
-// So we don't need to have a Rc or else.
-pub struct GlobalProxy<Source: SubFixture>(Source::Proxy);
+impl<Source> ::std::ops::Deref for Global<Source>
+where
+    Source: SubFixture,
+{
+    type Target = <Self as ::rustest::Fixture>::Type;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
-impl<Source: SubFixture> rustest::Duplicate for GlobalProxy<Source> {
+pub struct Proxy<Source: SubFixture> {
+    inner: Arc<Mutex<LazyValue<Source, (Source::Proxy,)>>>,
+    name: Option<String>,
+}
+
+impl<Source: SubFixture> Duplicate for Proxy<Source> {
     fn duplicate(&self) -> Self {
-        Self(self.0.duplicate())
+        Self {
+            inner: self.inner.clone(),
+            name: self.name.clone(),
+        }
     }
 }
 
-impl<Source: SubFixture> rustest::TestName for GlobalProxy<Source> {
+impl<Source: SubFixture> TestName for Proxy<Source> {
     fn name(&self) -> Option<String> {
-        self.0.name()
+        self.name.clone()
     }
 }
 
-impl<Source: SubFixture> rustest::FixtureProxy for GlobalProxy<Source> {
-    type Fixt = Global<Source>;
-    const SCOPE: rustest::FixtureScope = rustest::FixtureScope::Global;
+impl<Source: SubFixture> Proxy<Source>
+where
+    ProxyCombination<(Source::Proxy,)>: TestName,
+{
+    fn new(proxy: ProxyCombination<(Source::Proxy,)>) -> Self {
+        let name = proxy.name();
+        let inner = proxy.into();
+        Self {
+            inner: Arc::new(Mutex::new(inner)),
+            name,
+        }
+    }
+}
 
-    fn setup(ctx: &mut rustest::TestContext) -> Vec<Self>
-    where
-        Self: Sized,
-    {
+impl<Source: SubFixture> FixtureProxy for Proxy<Source> {
+    type Fixt = Global<Source>;
+    const SCOPE: FixtureScope = FixtureScope::Global;
+
+    fn setup(ctx: &mut TestContext) -> Vec<Self> {
         if let Some(b) = ctx.get() {
             return b;
         }
-        let proxies: Vec<_> = Source::Proxy::setup(ctx)
+        // We have to call this function for each combination of its fixtures.
+        let proxies = ProxyMatrix::<(Source::Proxy,)>::setup(ctx);
+        let inners = proxies
             .into_iter()
-            .map(|b| Self(b))
-            .collect();
+            .map(|b| Self::new(b))
+            .collect::<Vec<_>>();
 
-        ctx.add::<Self>(proxies.duplicate());
-        proxies
+        ctx.add::<Self>(inners.duplicate());
+        inners
     }
 
-    fn build(self) -> rustest::FixtureCreationResult<Self::Fixt> {
-        Ok(Global(self.0.build()?))
+    fn build(self) -> FixtureCreationResult<Self::Fixt> {
+        let inner = self
+            .inner
+            .lock()
+            .unwrap()
+            .get(|CallArgs((source,))| Ok((source, None)))?;
+        Ok(Global(inner))
     }
 }

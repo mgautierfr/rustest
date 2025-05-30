@@ -1,17 +1,11 @@
-use std::{
-    ops::Deref,
-    sync::{Arc, OnceLock},
-};
-
-use rustest::{FixtureCreationResult, FixtureScope};
+use rustest::{FixtureProxy, FixtureScope};
 
 /// A temporary file.
 ///
 /// A temporary file, generated with `tempfile` crate.
-#[derive(Clone)]
-pub struct TempFile(Arc<tempfile::NamedTempFile>);
+pub struct TempFile(tempfile::NamedTempFile);
 
-impl Deref for TempFile {
+impl std::ops::Deref for TempFile {
     type Target = tempfile::NamedTempFile;
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -20,43 +14,37 @@ impl Deref for TempFile {
 
 impl rustest::Fixture for TempFile {
     type Type = tempfile::NamedTempFile;
-    type Proxy = TempFileProxy;
+    type Proxy = Proxy;
 }
 
-pub struct TempFileProxy(Arc<OnceLock<FixtureCreationResult<Arc<tempfile::NamedTempFile>>>>);
+pub struct Proxy;
 
-impl rustest::Duplicate for TempFileProxy {
+impl rustest::Duplicate for Proxy {
     fn duplicate(&self) -> Self {
-        Self(Arc::clone(&self.0))
+        Self
     }
 }
 
-impl rustest::TestName for TempFileProxy {
+impl rustest::TestName for Proxy {
     fn name(&self) -> Option<String> {
         None
     }
 }
 
-impl rustest::FixtureProxy for TempFileProxy {
+impl FixtureProxy for Proxy {
     type Fixt = TempFile;
-    const SCOPE: FixtureScope = FixtureScope::Unique;
+    const SCOPE: FixtureScope = FixtureScope::Once;
 
     fn setup(_ctx: &mut rustest::TestContext) -> Vec<Self>
     where
         Self: Sized,
     {
-        vec![Self(Arc::new(OnceLock::new()))]
+        vec![Self]
     }
 
     fn build(self) -> rustest::FixtureCreationResult<Self::Fixt> {
-        self.0
-            .get_or_init(|| {
-                tempfile::NamedTempFile::new_in(std::env::temp_dir())
-                    .map(Arc::new)
-                    .map_err(|e| rustest::FixtureCreationError::new("TempFile", e))
-            })
-            .as_ref()
-            .map(|tmp| TempFile(Arc::clone(tmp)))
-            .map_err(|e| e.clone())
+        tempfile::NamedTempFile::new_in(std::env::temp_dir())
+            .map(TempFile)
+            .map_err(|e| rustest::FixtureCreationError::new("TempFile", e))
     }
 }

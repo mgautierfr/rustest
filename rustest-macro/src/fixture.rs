@@ -8,9 +8,10 @@ use syn::{
 
 use crate::utils::{FixtureInfo, gen_fixture_call, gen_param_fixture, to_call_args, to_tuple};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 enum FixtureScope {
-    Unique,
+    Once,
+    MatrixUnique,
     Test,
     Global,
 }
@@ -19,13 +20,14 @@ impl Parse for FixtureScope {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let ident: Ident = input.parse()?;
         match ident.to_string().as_str() {
-            "unique" => Ok(FixtureScope::Unique),
+            "once" => Ok(FixtureScope::Once),
+            "matrix" => Ok(FixtureScope::MatrixUnique),
             "global" => Ok(FixtureScope::Global),
             "test" => Ok(FixtureScope::Test),
             _ => Err(syn::Error::new_spanned(
                 &ident,
                 format!(
-                    "expected one of 'unique', 'global', or 'test'. Got {}.",
+                    "expected one of 'once', 'matrix', 'global', or 'test'. Got {}.",
                     ident
                 ),
             )),
@@ -36,7 +38,8 @@ impl Parse for FixtureScope {
 impl From<FixtureScope> for TokenStream {
     fn from(value: FixtureScope) -> Self {
         match value {
-            FixtureScope::Unique => quote! {::rustest::FixtureScope::Unique},
+            FixtureScope::Once => quote! {::rustest::FixtureScope::Once},
+            FixtureScope::MatrixUnique => quote! {::rustest::FixtureScope::MatrixUnique},
             FixtureScope::Test => quote! {::rustest::FixtureScope::Test},
             FixtureScope::Global => quote! {::rustest::FixtureScope::Global},
         }
@@ -159,10 +162,9 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
     let (impl_generics, ty_generics, where_clause) = fixture_generics.split_for_impl();
     let (fallible, fixture_type) = get_fixture_type(&sig)?;
     let fallible = args.fallible.unwrap_or(fallible);
-    let scope = args
-        .scope
-        .or(Some(FixtureScope::Unique))
-        .map(TokenStream::from);
+    let scope = args.scope.unwrap_or(FixtureScope::Once);
+
+    let scope_token = TokenStream::from(scope);
 
     let FixtureInfo {
         sub_fixtures_proxies,
@@ -189,7 +191,6 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         }
     };
 
-    let inner_type = quote! { ::rustest::SharedFixtureValue<#fixture_type> };
     let sig_inputs = &sig.inputs;
     let builder_output = &sig.output;
 
@@ -217,12 +218,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         phantom_builders.push(quote! { #phantom_ident: Default::default() });
     }
 
-    Ok(quote! {
-        mod #mod_name {
-            use super::*;
-            #param_fixture_def
-        } // end of inner mod
-
+    let def_tokens = quote! {
         #vis struct #def_name #fixture_generics #where_clause {
                 #(#phantom_markers),*
             }
@@ -231,7 +227,7 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
             type Fixt = #fixture_name #ty_generics;
             type SubFixtures = #sub_fixtures_tuple;
             type SubProxies =  #sub_proxy_types_tuple;
-            const SCOPE: ::rustest::FixtureScope = #scope;
+            const SCOPE: ::rustest::FixtureScope = #scope_token;
 
             fn build_fixt(
                 #sub_fixtures_call_args : ::rustest::CallArgs<Self::SubFixtures>,
@@ -252,14 +248,35 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                 #teardown
             }
         }
+    };
+
+    let (inner_type, proxy_type) = if let FixtureScope::Once = scope {
+        (
+            quote! { ::rustest::FixtureTeardown<#fixture_type> },
+            quote! { ::rustest::OnceProxy },
+        )
+    } else {
+        (
+            quote! { ::rustest::SharedFixtureValue<#fixture_type> },
+            quote! { ::rustest::SharedProxy },
+        )
+    };
+
+    Ok(quote! {
+        mod #mod_name {
+            use super::*;
+            #param_fixture_def
+        } // end of inner mod
+        #def_tokens
 
         #vis struct #fixture_name #fixture_generics #where_clause {
             inner: #inner_type,
             #(#phantom_markers),*
         }
+
         impl #impl_generics ::rustest::Fixture for #fixture_name #ty_generics #where_clause {
             type Type = #fixture_type;
-            type Proxy = ::rustest::Proxy<#def_name #ty_generics>;
+            type Proxy = #proxy_type <#def_name #ty_generics>;
         }
 
         impl #impl_generics From<#inner_type> for #fixture_name #ty_generics #where_clause {
@@ -308,13 +325,13 @@ mod tests {
     #[test]
     fn test_parse_fixture_attr_some_fields() {
         let input = quote! {
-            scope = unique,
+            scope = once,
             fallible = false
         };
 
         let fixture_attr = parse2::<FixtureAttr>(input).unwrap();
 
-        assert_eq!(fixture_attr.scope, Some(FixtureScope::Unique));
+        assert_eq!(fixture_attr.scope, Some(FixtureScope::Once));
         assert!(!fixture_attr.fallible.unwrap());
         assert!(fixture_attr.name.is_none());
         assert!(fixture_attr.teardown.is_none());
@@ -358,7 +375,7 @@ mod tests {
         // Check that the error message is as expected
         assert_eq!(
             error.to_string(),
-            "expected one of 'unique', 'global', or 'test'. Got invalid_scope."
+            "expected one of 'once', 'matrix', 'global', or 'test'. Got invalid_scope."
         );
     }
 }

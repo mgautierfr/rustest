@@ -13,7 +13,7 @@ Think about pytest, but for rust.
 ## Features
 
 * **Fixture Management:**  Easily define and manage test fixtures, including:
- - fixture scopes (unique, test, global)
+ - fixture scopes (once, matrix, test, global)
  - setup and teardown functionalities
  - fixtures dependencies
 * **Parametrized Tests:**  Run tests with different parameters, generating multiple test cases from a single test function.

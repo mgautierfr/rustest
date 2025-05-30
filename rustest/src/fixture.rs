@@ -117,11 +117,15 @@ impl<F> SubFixture for F where F: Fixture + 'static {}
 /// Represents the scope of a fixture.
 ///
 /// The scope determines the test's "lifetime" of the fixture.
+#[derive(Copy, Clone)]
 pub enum FixtureScope {
     /// Fixture is used only once.
     ///
     /// The fixture is (re)created everytime we request it.
-    Unique,
+    Once,
+
+    /// Fixture is unique in a Fixture/Test matrix.
+    MatrixUnique,
 
     /// Fixture is associated to a test.
     ///
@@ -201,9 +205,15 @@ pub type TeardownFn<T> = Box<dyn Fn(&mut T) + Send + Sync>;
 ///
 /// `FixtureTeardown` holds a value and an optional teardown function that is called when the
 /// fixture is dropped.
-struct FixtureTeardown<T> {
+pub struct FixtureTeardown<T> {
     value: T,
     teardown: Option<TeardownFn<T>>,
+}
+
+impl<T> FixtureTeardown<T> {
+    pub fn new(value: T, teardown: Option<TeardownFn<T>>) -> Self {
+        Self { value, teardown }
+    }
 }
 
 impl<T> std::ops::Deref for FixtureTeardown<T> {
@@ -221,7 +231,10 @@ impl<T> Drop for FixtureTeardown<T> {
     }
 }
 
-#[doc(hidden)]
+/// A lazyness value build when we get it.
+/// The value is build by calling the Fn (in get) using the builders.
+/// This intermediate structure is needed as we know the sub builders when we setup
+/// a builder, and we have the build fn when we build the fixture.
 pub enum LazyValue<V, B> {
     Value(SharedFixtureValue<V>),
     Proxies(Option<ProxyCombination<B>>),

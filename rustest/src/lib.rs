@@ -125,14 +125,14 @@ use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
 pub use fixture::{
-    Fixture, FixtureCreationError, FixtureCreationResult, FixtureProxy, FixtureScope, SubFixture,
-    TeardownFn,
+    Fixture, FixtureCreationError, FixtureCreationResult, FixtureProxy, FixtureScope,
+    FixtureTeardown, LazyValue, SubFixture, TeardownFn,
 };
 #[doc(hidden)]
-pub use fixture_proxy::{FixtureDef, Proxy};
+pub use fixture_proxy::{FixtureDef, OnceProxy, SharedProxy};
 pub use proxy_matrix::Duplicate;
 #[doc(hidden)]
-pub use proxy_matrix::{CallArgs, ProxyCall, ProxyCombination, ProxyMatrix};
+pub use proxy_matrix::{CallArgs, MatrixSetup, ProxyCall, ProxyCombination, ProxyMatrix};
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError, TestGenerator, TestRunner};
 pub use test::{Result, Test, TestContext};
@@ -241,13 +241,24 @@ pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode 
 ///
 /// # Fixture's scope
 ///
-/// ## Unique scope
+/// ## Once scope
 ///
-/// `#[fixture(scope=unique)]`
+/// `#[fixture(scope=once)]`
 ///
 /// This is the default if not specified.
 ///
 /// The fixture is (re)created everytime it is requested. It is not shared.
+///
+/// ## Matrix scope
+///
+/// `#[fixture(scope=matrix)]`
+///
+/// The fixture is created only once per matrix.
+/// There is a matrix per fixture and test.
+/// This means that the fixture is shared by every fixture variants / test cases.
+/// (Buit only at one level depth).
+/// If you want the fixture to be shared at test level, whatever the dependency tree is,
+/// use test or global scope.
 ///
 /// ## Test scope
 ///
