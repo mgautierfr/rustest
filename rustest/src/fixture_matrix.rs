@@ -543,9 +543,19 @@ mod tests {
 
     #[test]
     fn test_builder_combination_test_name() {
-        let combination = BuilderCombination((5, false, "A text"));
+        struct P<T>(T);
+
+        impl<T> TestName for P<T>
+        where
+            T: crate::ParamName,
+        {
+            fn name(&self) -> Option<String> {
+                Some(self.0.param_name())
+            }
+        }
+        let combination = BuilderCombination((P(5), P(false), P("A text")));
         assert_eq!(combination.name(), Some("[5|false|A text]".into()));
-        let combination = BuilderCombination((5, false, (Box::new(42), vec![5; 3])));
+        let combination = BuilderCombination((P(5), P(false), P((Box::new(42), vec![5; 3]))));
         assert_eq!(combination.name(), Some("[5|false|(42,[5,5,5])]".into()));
     }
 }

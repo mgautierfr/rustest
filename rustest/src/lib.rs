@@ -136,7 +136,7 @@ pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, FixtureMatri
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError, TestGenerator, TestRunner};
 pub use test::{Result, Test, TestContext};
-pub use test_name::TestName;
+pub use test_name::{ParamName, TestName};
 
 pub use ctor::declarative::ctor;
 
@@ -469,9 +469,9 @@ pub fn run_tests(test_generators: &[TestGeneratorFn]) -> std::process::ExitCode 
 /// #[derive(Clone)]
 /// pub(crate) struct MyValue(u32);
 ///
-/// impl TestName for MyValue {
-///     fn name(&self) -> Option<String> {
-///         Some(format!("{}", self.0))
+/// impl ParamName for MyValue {
+///     fn param_name(&self) -> String {
+///         format!("{}", self.0)
 ///     }
 /// }
 ///

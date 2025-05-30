@@ -108,8 +108,9 @@ pub(crate) fn gen_param_fixture(
             impl ::rustest::TestName for ParamBuilder
             {
                 fn name(&self) -> Option<String> {
+                    use ::rustest::ParamName;
                     // Param value should always be display
-                    Some(format!(#test_name_format, self.0.name().unwrap()))
+                    Some(format!(#test_name_format, self.0.param_name()))
                 }
             }
 
