@@ -111,7 +111,7 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
     };
 
     let FixtureInfo {
-        sub_fixtures_builders,
+        sub_fixtures_proxies,
         sub_fixtures_inputs,
         ..
     } = gen_fixture_call(&sig, None)?;
@@ -129,12 +129,12 @@ pub(crate) fn test_impl(args: TestAttr, input: ItemFn) -> Result<TokenStream, To
                 pub(super) #sig #block
 
                 pub fn #test_generator_ident(ctx: &mut ::rustest::TestContext) -> Vec<::rustest::Test> {
-                    use ::rustest::{FixtureBuilder, IntoError, BuilderCall};
+                    use ::rustest::{FixtureProxy, IntoError, ProxyCall};
 
                     // We have to call build a Test per combination of fixtures.
-                    // Lets build a fixture_matrix.
-                    let fixtures_matrix = ::rustest::FixtureMatrix::new()#(.feed(#sub_fixtures_builders::setup(ctx)))*;
-                    let combinations = fixtures_matrix.flatten();
+                    // Lets build a proxy_matrix.
+                    let proxies_matrix = ::rustest::ProxyMatrix::new()#(.feed(#sub_fixtures_proxies::setup(ctx)))*;
+                    let combinations = proxies_matrix.flatten();
 
                     // Append a fixture identifier to test name if we have multiple fixtures instances
                     let test_name = if combinations.len() > 1 {

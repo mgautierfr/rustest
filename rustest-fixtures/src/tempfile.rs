@@ -20,26 +20,25 @@ impl Deref for TempFile {
 
 impl rustest::Fixture for TempFile {
     type Type = tempfile::NamedTempFile;
-    type Builder = TempFileBuilder;
+    type Proxy = TempFileProxy;
 }
 
-pub struct TempFileBuilder(Arc<OnceLock<FixtureCreationResult<Arc<tempfile::NamedTempFile>>>>);
+pub struct TempFileProxy(Arc<OnceLock<FixtureCreationResult<Arc<tempfile::NamedTempFile>>>>);
 
-impl rustest::Duplicate for TempFileBuilder {
+impl rustest::Duplicate for TempFileProxy {
     fn duplicate(&self) -> Self {
         Self(Arc::clone(&self.0))
     }
 }
 
-impl rustest::TestName for TempFileBuilder {
+impl rustest::TestName for TempFileProxy {
     fn name(&self) -> Option<String> {
         None
     }
 }
 
-impl rustest::FixtureBuilder for TempFileBuilder {
+impl rustest::FixtureProxy for TempFileProxy {
     type Fixt = TempFile;
-    type Type = tempfile::NamedTempFile;
     const SCOPE: FixtureScope = FixtureScope::Unique;
 
     fn setup(_ctx: &mut rustest::TestContext) -> Vec<Self>
@@ -49,11 +48,11 @@ impl rustest::FixtureBuilder for TempFileBuilder {
         vec![Self(Arc::new(OnceLock::new()))]
     }
 
-    fn build(&self) -> rustest::FixtureCreationResult<Self::Fixt> {
+    fn build(self) -> rustest::FixtureCreationResult<Self::Fixt> {
         self.0
             .get_or_init(|| {
                 tempfile::NamedTempFile::new_in(std::env::temp_dir())
-                    .map(|f| Arc::new(f))
+                    .map(Arc::new)
                     .map_err(|e| rustest::FixtureCreationError::new("TempFile", e))
             })
             .as_ref()

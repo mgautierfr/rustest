@@ -117,22 +117,22 @@
 //! ```
 
 mod fixture;
-mod fixture_builder;
-mod fixture_matrix;
+mod fixture_proxy;
+mod proxy_matrix;
 mod test;
 mod test_name;
 use fixture::FixtureRegistry;
 #[doc(hidden)]
 pub use fixture::SharedFixtureValue;
 pub use fixture::{
-    Fixture, FixtureBuilder, FixtureCreationError, FixtureCreationResult, FixtureScope, SubFixture,
+    Fixture, FixtureCreationError, FixtureCreationResult, FixtureProxy, FixtureScope, SubFixture,
     TeardownFn,
 };
 #[doc(hidden)]
-pub use fixture_builder::{Builder, FixtureDef};
-pub use fixture_matrix::Duplicate;
+pub use fixture_proxy::{FixtureDef, Proxy};
+pub use proxy_matrix::Duplicate;
 #[doc(hidden)]
-pub use fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, FixtureMatrix};
+pub use proxy_matrix::{CallArgs, ProxyCall, ProxyCombination, ProxyMatrix};
 #[doc(hidden)]
 pub use test::{InnerTestResult, IntoError, TestGenerator, TestRunner};
 pub use test::{Result, Test, TestContext};

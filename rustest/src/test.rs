@@ -1,4 +1,4 @@
-use super::fixture::FixtureBuilder;
+use super::fixture::FixtureProxy;
 use libtest_mimic::Failed;
 use std::{error::Error, fmt::Display};
 
@@ -169,7 +169,7 @@ impl From<Test> for libtest_mimic::Trial {
 
 /// The context of a specific test.
 ///
-/// Test context is mainly used to store existing fixture builder when fixture scope is Test or Global.
+/// Test context is mainly used to store existing fixture proxy when fixture scope is Test or Global.
 pub struct TestContext<'a> {
     global_reg: &'a mut FixtureRegistry,
     reg: &'a mut FixtureRegistry,
@@ -181,7 +181,7 @@ impl<'a> TestContext<'a> {
     }
     pub fn add<B>(&mut self, value: Vec<B>)
     where
-        B: FixtureBuilder + 'static,
+        B: FixtureProxy + 'static,
     {
         let reg = match B::SCOPE {
             FixtureScope::Test => &mut self.reg,
@@ -193,7 +193,7 @@ impl<'a> TestContext<'a> {
 
     pub fn get<B>(&mut self) -> Option<Vec<B>>
     where
-        B: FixtureBuilder + 'static,
+        B: FixtureProxy + 'static,
     {
         let reg = match B::SCOPE {
             FixtureScope::Test => &mut self.reg,
@@ -205,7 +205,7 @@ impl<'a> TestContext<'a> {
 
     pub fn get_fixture<Fix>(&mut self) -> Vec<Fix>
     where
-        Fix: FixtureBuilder + Any,
+        Fix: FixtureProxy + Any,
     {
         Fix::setup(self)
     }

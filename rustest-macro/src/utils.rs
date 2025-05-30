@@ -1,8 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{
-    Expr, FnArg, Generics, Ident, PatType, PathArguments, Signature, Type, TypePath, Visibility,
-};
+use syn::{Expr, FnArg, Ident, PatType, PathArguments, Signature, Type, TypePath, Visibility};
 
 pub fn to_tuple(input: &[TokenStream]) -> TokenStream {
     if input.is_empty() {
@@ -20,7 +18,7 @@ pub fn to_call_args(input: &[TokenStream]) -> TokenStream {
 }
 
 pub struct FixtureInfo {
-    pub sub_fixtures_builders: Vec<TokenStream>,
+    pub sub_fixtures_proxies: Vec<TokenStream>,
     pub sub_fixtures: Vec<TokenStream>,
     pub sub_fixtures_inputs: Vec<TokenStream>,
 }
@@ -33,7 +31,7 @@ pub(crate) fn gen_fixture_call(
     sig: &Signature,
     mod_name: Option<&Ident>,
 ) -> Result<FixtureInfo, TokenStream> {
-    let mut sub_fixtures_builders = vec![];
+    let mut sub_fixtures_proxies = vec![];
     let mut sub_fixtures = vec![];
     let mut sub_fixtures_inputs = vec![];
     for (idx, fnarg) in sig.inputs.iter().enumerate() {
@@ -48,16 +46,12 @@ pub(crate) fn gen_fixture_call(
                     path.clone()
                 };
                 let last_segment = new_path.segments.last_mut().unwrap();
-                if let PathArguments::AngleBracketed(g) = &last_segment.arguments {
-                    let gene: Generics = syn::parse_quote! { #g };
-                    let gene = gene.split_for_impl();
-                    let turbo_fish = gene.1.as_turbofish();
-                    last_segment.arguments = PathArguments::None;
-                    sub_fixtures_builders
-                        .push(quote! { <#new_path #turbo_fish as ::rustest::Fixture>::Builder });
+                if let PathArguments::AngleBracketed(_) = last_segment.arguments {
+                    let g = std::mem::take(&mut last_segment.arguments);
+                    sub_fixtures_proxies
+                        .push(quote! { <#new_path :: #g as ::rustest::Fixture>::Proxy });
                 } else {
-                    sub_fixtures_builders
-                        .push(quote! { <#new_path as ::rustest::Fixture>::Builder });
+                    sub_fixtures_proxies.push(quote! { <#new_path as ::rustest::Fixture>::Proxy });
                 }
             } else {
                 return Err(syn::Error::new_spanned(ty, "Invalid arg type").to_compile_error());
@@ -68,7 +62,7 @@ pub(crate) fn gen_fixture_call(
         sub_fixtures_inputs.push(quote! {#pat});
     }
     Ok(FixtureInfo {
-        sub_fixtures_builders,
+        sub_fixtures_proxies,
         sub_fixtures,
         sub_fixtures_inputs,
     })
@@ -91,11 +85,11 @@ pub(crate) fn gen_param_fixture(
         };
         quote! {
             #visibility struct Param(pub #param_type);
-            #visibility struct ParamBuilder {
+            #visibility struct ParamProxy {
                 v: #param_type,
                 name: String
             }
-            impl ParamBuilder
+            impl ParamProxy
             {
                 fn new<T>(inner: T) -> Self
                 where
@@ -107,7 +101,7 @@ pub(crate) fn gen_param_fixture(
                 }
             }
 
-            impl ::rustest::Duplicate for ParamBuilder {
+            impl ::rustest::Duplicate for ParamProxy {
                 fn duplicate(&self) -> Self {
                     Self{
                         v: self.v.clone(),
@@ -116,16 +110,15 @@ pub(crate) fn gen_param_fixture(
                 }
             }
 
-            impl ::rustest::TestName for ParamBuilder
+            impl ::rustest::TestName for ParamProxy
             {
                 fn name(&self) -> Option<String> {
                     Some(self.name.clone())
                 }
             }
 
-            impl ::rustest::FixtureBuilder for ParamBuilder
+            impl ::rustest::FixtureProxy for ParamProxy
              {
-                type Type = #param_type;
                 type Fixt = Param;
                 const SCOPE : ::rustest::FixtureScope = ::rustest::FixtureScope::Test;
 
@@ -133,14 +126,14 @@ pub(crate) fn gen_param_fixture(
                     #expr.into_iter().map(Self::new).collect()
                 }
 
-                fn build(&self) -> ::rustest::FixtureCreationResult<Self::Fixt> {
-                    Ok(Param(self.v.clone()))
+                fn build(self) -> ::rustest::FixtureCreationResult<Self::Fixt> {
+                    Ok(Param(self.v))
                 }
             }
 
             impl ::rustest::Fixture for Param {
                 type Type = #param_type;
-                type Builder = ParamBuilder;
+                type Proxy = ParamProxy;
             }
 
             impl std::ops::Deref for Param

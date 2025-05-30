@@ -1,5 +1,5 @@
 use super::{
-    fixture_matrix::{BuilderCall, BuilderCombination, CallArgs, Duplicate},
+    proxy_matrix::{CallArgs, Duplicate, ProxyCall, ProxyCombination},
     test::TestContext,
     test_name::TestName,
 };
@@ -42,22 +42,19 @@ impl FixtureCreationError {
     }
 }
 
-/// A trait representing a [Fixture] builder.
+/// A trait representing a [Fixture] proxy.
 ///
 ///
-pub trait FixtureBuilder: Duplicate + TestName {
-    /// The user type of the fixture.
-    type Type;
-
+pub trait FixtureProxy: Duplicate + TestName {
     type Fixt: Fixture;
 
     const SCOPE: FixtureScope;
 
-    /// Sets up the builders.
+    /// Sets up the proxies.
     ///
-    /// Each builder is responsible to create a fixture.
+    /// Each proxy is responsible to create a fixture.
     /// When a fixtures is parametrized (either directly or because of its dependencies),
-    /// `setup` must returns as many builders as there is fixtures to build.
+    /// `setup` must returns as many proxies as there is fixtures to build.
     ///
     /// # Arguments
     ///
@@ -65,16 +62,16 @@ pub trait FixtureBuilder: Duplicate + TestName {
     ///
     /// # Returns
     ///
-    /// A result containing a vector of builders.
+    /// A result containing a vector of proxies.
     fn setup(ctx: &mut TestContext) -> Vec<Self>
     where
         Self: Sized;
 
     /// Build a fixture.
     ///
-    /// Note that duplicated builder must build the **SAME** fixture.
-    /// It is up to the builder implementation to take care of needed cache or shared states.
-    fn build(&self) -> FixtureCreationResult<Self::Fixt>
+    /// Note that duplicated proxy must build the **SAME** fixture.
+    /// It is up to the proxy implementation to take care of needed cache or shared states.
+    fn build(self) -> FixtureCreationResult<Self::Fixt>
     where
         Self: Sized;
 }
@@ -86,7 +83,7 @@ pub trait FixtureBuilder: Duplicate + TestName {
 pub trait Fixture: Deref<Target = Self::Type> {
     /// The user type of the fixture.
     type Type;
-    type Builder: FixtureBuilder<Fixt = Self>;
+    type Proxy: FixtureProxy<Fixt = Self>;
 }
 
 /// A fixture that can be used as dependency for another fixture.
@@ -170,7 +167,7 @@ impl FixtureRegistry {
     /// * `F` - The type of the fixture.
     pub(crate) fn add<B>(&mut self, value: Vec<B>)
     where
-        B: FixtureBuilder + 'static,
+        B: FixtureProxy + 'static,
     {
         self.fixtures.insert(TypeId::of::<B>(), Box::new(value));
     }
@@ -186,11 +183,11 @@ impl FixtureRegistry {
     /// An option containing a vector of the inner type of the fixture, if found.
     pub(crate) fn get<B>(&mut self) -> Option<Vec<B>>
     where
-        B: FixtureBuilder + 'static,
+        B: FixtureProxy + 'static,
     {
         self.fixtures.get(&TypeId::of::<B>()).map(|a| {
-            let builder = a.downcast_ref::<Vec<B>>().unwrap();
-            builder.duplicate()
+            let proxy = a.downcast_ref::<Vec<B>>().unwrap();
+            proxy.duplicate()
         })
     }
 }
@@ -198,7 +195,7 @@ impl FixtureRegistry {
 /// A type alias for a teardown function.
 ///
 /// The teardown function is called when the fixture is dropped to clean up resources.
-pub type TeardownFn<T> = dyn Fn(&mut T) + Send + Sync;
+pub type TeardownFn<T> = Box<dyn Fn(&mut T) + Send + Sync>;
 
 /// A struct that manages the teardown of a fixture.
 ///
@@ -206,7 +203,7 @@ pub type TeardownFn<T> = dyn Fn(&mut T) + Send + Sync;
 /// fixture is dropped.
 struct FixtureTeardown<T> {
     value: T,
-    teardown: Option<Arc<TeardownFn<T>>>,
+    teardown: Option<TeardownFn<T>>,
 }
 
 impl<T> std::ops::Deref for FixtureTeardown<T> {
@@ -226,30 +223,30 @@ impl<T> Drop for FixtureTeardown<T> {
 
 #[doc(hidden)]
 pub enum LazyValue<V, B> {
-    Value(V),
-    Builders(Option<BuilderCombination<B>>),
+    Value(SharedFixtureValue<V>),
+    Proxies(Option<ProxyCombination<B>>),
 }
 
-impl<V, B> From<BuilderCombination<B>> for LazyValue<V, B> {
-    fn from(b: BuilderCombination<B>) -> Self {
-        Self::Builders(Some(b))
+impl<V, B> From<ProxyCombination<B>> for LazyValue<V, B> {
+    fn from(b: ProxyCombination<B>) -> Self {
+        Self::Proxies(Some(b))
     }
 }
 
-impl<V: Clone, B> LazyValue<V, B> {
-    pub fn get<F, T>(&mut self, f: F) -> FixtureCreationResult<V>
+impl<V, B> LazyValue<V, B> {
+    pub fn get<F, T>(&mut self, f: F) -> FixtureCreationResult<SharedFixtureValue<V>>
     where
-        F: Fn(CallArgs<T>) -> FixtureCreationResult<V>,
-        BuilderCombination<B>: BuilderCall<T>,
+        F: Fn(CallArgs<T>) -> FixtureCreationResult<(V, Option<TeardownFn<V>>)>,
+        ProxyCombination<B>: ProxyCall<T>,
     {
-        if let LazyValue::Builders(b) = self {
-            let value = b.take().unwrap().call(f)?;
-            *self = LazyValue::Value(value);
+        if let LazyValue::Proxies(b) = self {
+            let (value, teardown) = b.take().unwrap().call(f)?;
+            *self = LazyValue::Value(SharedFixtureValue::new(value, teardown));
         };
 
         match self {
             LazyValue::Value(v) => Ok(v.clone()),
-            LazyValue::Builders(_) => unreachable!(),
+            LazyValue::Proxies(_) => unreachable!(),
         }
     }
 }
@@ -262,11 +259,8 @@ impl<V: Clone, B> LazyValue<V, B> {
 pub struct SharedFixtureValue<T>(Arc<FixtureTeardown<T>>);
 
 impl<T> SharedFixtureValue<T> {
-    pub fn new(value: T, teardown: Option<Arc<TeardownFn<T>>>) -> Self {
-        Self(Arc::new(FixtureTeardown {
-            value,
-            teardown: teardown.clone(),
-        }))
+    pub fn new(value: T, teardown: Option<TeardownFn<T>>) -> Self {
+        Self(Arc::new(FixtureTeardown { value, teardown }))
     }
 }
 
