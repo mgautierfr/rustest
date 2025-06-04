@@ -14,7 +14,7 @@ keywords.workspace = true
 ctor = { version = "0.4.1", features = ["__no_warn_on_missing_unsafe"] }
 googletest = { version = "0.14.0", optional = true }
 libtest-mimic = "0.8.1"
-rustest-macro = { version = "0.2.0", path = "../rustest-macro" }
+rustest-macro = { version = "0.3.0", path = "../rustest-macro" }
 
 [features]
 googletest = ["dep:googletest"]
