@@ -273,7 +273,7 @@ fn test_number_string(text: ANumberAsString) {
 #[fixture]
 fn NumberAsString<Source>(number: Source) -> String
 where
-    Source: rustest::Fixture<Type =u32>
+    Source: rustest::SubFixture<Type =u32>
 {
     format!("This is a number : {}", *number)
 }
