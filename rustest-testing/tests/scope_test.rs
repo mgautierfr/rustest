@@ -43,10 +43,10 @@ impl Collector {
         for (key, value) in stderr
             .split('\n')
             .filter(|l| !l.is_empty())
-            .map(|l| l.split_once(|c| c == ':').unwrap())
+            .map(|l| l.split_once(':').unwrap())
             .map(|(key, value)| (key.to_string(), value.parse().expect("Should parse a u32")))
         {
-            map.entry(key).or_insert_with(|| Vec::new()).push(value)
+            map.entry(key).or_insert_with(Vec::new).push(value)
         }
         for vec in map.values_mut() {
             vec.sort();

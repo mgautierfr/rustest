@@ -45,7 +45,9 @@ jobs:
 
       - name: Run clippy
         if: ${{ matrix.toolchain == 'stable' }}
-        run: cargo clippy
+        run: |
+          cargo clippy --all
+          cargo clippy --tests
 
       - name: Run audit
         run: cargo audit
