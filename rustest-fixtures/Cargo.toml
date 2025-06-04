@@ -11,5 +11,5 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-rustest = { version = "0.3.0", path = "../rustest" }
+rustest = { version = "0.3.1", path = "../rustest" }
 tempfile = "3.19.1"

@@ -1,5 +1,12 @@
 # Rustest's Changelog
 
+## [0.3.1] - 2025-06-04
+
+### Changed
+
+- Rename inner trait method `ToParamName::into()` to `ToParamName::into_param_name()` to avoid
+  conflict with `Into::into()` in user code.
+
 ## [0.3.0] - 2025-06-04
 
 ### Added
