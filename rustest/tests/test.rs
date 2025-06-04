@@ -1,3 +1,4 @@
+#![allow(clippy::assertions_on_constants, clippy::eq_op)]
 use std::{
     process::Stdio,
     sync::{Mutex, atomic::AtomicU32},
