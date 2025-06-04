@@ -95,7 +95,7 @@ pub(crate) fn gen_param_fixture(
                 where
                     T: ::rustest::ToParamName<#param_type>
                 {
-                    let (v, name) = inner.into();
+                    let (v, name) = inner.into_param_name();
                     let name = format!(#test_name_format, name);
                     Self{v, name}
                 }

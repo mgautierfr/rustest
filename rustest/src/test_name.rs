@@ -56,27 +56,27 @@ impl<T: ParamName> ParamName for Option<T> {
 }
 
 pub trait ToParamName<T> {
-    fn into(self) -> (T, String);
+    fn into_param_name(self) -> (T, String);
 }
 
 impl<T> ToParamName<T> for T
 where
     T: ParamName,
 {
-    fn into(self) -> (T, String) {
+    fn into_param_name(self) -> (T, String) {
         let name = self.param_name();
         (self, name)
     }
 }
 
 impl<T> ToParamName<T> for (T, String) {
-    fn into(self) -> (T, String) {
+    fn into_param_name(self) -> (T, String) {
         self
     }
 }
 
 impl<T> ToParamName<T> for (T, &str) {
-    fn into(self) -> (T, String) {
+    fn into_param_name(self) -> (T, String) {
         (self.0, self.1.to_owned())
     }
 }
