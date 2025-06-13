@@ -14,8 +14,9 @@ categories.workspace = true
 rustest = { path = "../rustest", features = ["googletest"] }
 rustest-fixtures = { path = "../rustest-fixtures" }
 
+googletest = "0.14"
+
 [dev-dependencies]
-googletest = "0.14.0"
 regex = "1.11.1"
 
 [[bin]]
