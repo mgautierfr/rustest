@@ -262,6 +262,19 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
         )
     };
 
+    // Only Once fixtures can be mutable
+    let deref_mut_impl = if let FixtureScope::Once = scope {
+        quote! {
+            impl #impl_generics ::std::ops::DerefMut for #fixture_name #ty_generics #where_clause {
+                fn deref_mut(&mut self) -> &mut Self::Target {
+                    &mut self.inner
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         mod #mod_name {
             use super::*;
@@ -294,6 +307,8 @@ pub(crate) fn fixture_impl(args: FixtureAttr, input: ItemFn) -> Result<TokenStre
                 &self.inner
             }
         }
+
+        #deref_mut_impl
     })
 }
 

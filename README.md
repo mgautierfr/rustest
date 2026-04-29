@@ -294,6 +294,46 @@ fn test_number_string_6(text: NumberAsString<TheNumber6>) {
 }
 ```
 
+**Fixture bindings can be mutable**
+
+For fixtures with `scope=once` (the default), the value binding can be `mut`, allowing a test to call methods
+that require `mut self` or `&mut self`.
+
+```rust
+struct Internal { /*...*/ }
+impl Internal {
+    /*...*/
+    fn new() -> Self { /*...*/ }
+    fn set(&mut self, v: u32) { /*...*/ }
+    fn get(&self) -> u32 { /*...*/ }
+}
+
+struct Resource {
+    internal: Internal,
+}
+
+impl Resource {
+    fn set(&mut self, v: u32) {
+        self.internal.set(v)  // Requires `&mut self`
+    }
+    fn get(&self) -> u32 {
+        self.internal.get()
+    }
+}
+
+#[fixture(scope=once)]
+fn AResource() -> Resource {
+    Resource { internal: Internal::new() }
+}
+
+#[test]
+fn resource_test(mut res: AResource) {
+    res.set(42);  // mut binding of `res` enables mutation of value
+    assert_eq!(res.get(), 42);
+}
+```
+
+Other scopes currently do not support this.
 
 **Running Tests:**
 
